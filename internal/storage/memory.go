@@ -46,11 +46,11 @@ func (m *Memory) MarkDone(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	event, ok := m.events[id]
-	if ok{
+	if ok {
 		event.Status = "completed"
 		m.events[id] = event
 	}
-	delete(m.events, id) 
+	delete(m.events, id)
 	return nil
 }
 
@@ -58,7 +58,7 @@ func (m *Memory) MarkFailed(ctx context.Context, id string, reason string) error
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	event, ok := m.events[id]
-	if ok{
+	if ok {
 		event.Retries = event.Retries + 1
 		event.LastError = reason
 		m.events[id] = event
@@ -70,16 +70,16 @@ func (m *Memory) MarkFailed(ctx context.Context, id string, reason string) error
 func (m *Memory) GetStats(ctx context.Context) (relay.Stats, error) {
 
 	var stats relay.Stats
-    
-    for _, event := range m.events {
-        switch {
-        case event.Retries == 0:
-            stats.Pending++
-        case event.Retries > 0 && event.Retries < 5:
-            stats.Retrying++
+
+	for _, event := range m.events {
+		switch {
+		case event.Retries == 0:
+			stats.Pending++
+		case event.Retries > 0 && event.Retries < 5:
+			stats.Retrying++
 		case event.Retries >= 5:
 			stats.Failed++
-        }
-    }    
-    return stats, nil
+		}
+	}
+	return stats, nil
 }

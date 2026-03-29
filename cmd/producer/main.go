@@ -29,18 +29,18 @@ func main() {
 		payload := fmt.Sprintf(`{"user_id": %d, "email": "user-%d@example.com"}`, rand.Intn(10000), rand.Intn(10000))
 
 		// 2. Insert into the Outbox table
-		for i := 0; i < 100; i++{
+		for i := 0; i < 100; i++ {
 			id := uuid.New()
 			query := `INSERT INTO outbox_events (id, topic, payload, status) VALUES ($1, $2, $3, 'pending')`
 			_, err := pool.Exec(ctx, query, id, topic, []byte(payload))
-			
+
 			if err != nil {
 				log.Printf("Insert failed: %v", err)
 			} else {
 				log.Printf("Inserted Event: %s", id)
 			}
 		}
-		
+
 		// 3. Wait a bit before the next one
 		time.Sleep(1 * time.Second)
 	}

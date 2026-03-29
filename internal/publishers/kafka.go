@@ -15,7 +15,7 @@ type Kafka struct {
 func NewKafka(brokers string) *Kafka {
 	// We parse the brokers (e.g. "localhost:9092,localhost:9093")
 	brokerList := strings.Split(strings.TrimPrefix(brokers, "kafka://"), ",")
-	
+
 	return &Kafka{
 		writer: &kafka.Writer{
 			Addr:     kafka.TCP(brokerList...),

@@ -73,7 +73,7 @@ func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
 			COUNT(*) FILTER (WHERE retries >= 5) as failed
 		FROM outbox_events 
 		WHERE status = 'pending'`
-	
+
 	err := p.pool.QueryRow(ctx, query).Scan(&stats.Pending, &stats.Retrying, &stats.Failed)
 	return stats, err
 }

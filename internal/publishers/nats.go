@@ -23,8 +23,8 @@ func NewNats(url string) (*Nats, error) {
 
 // Publish sends the payload to a NATS subject (topic).
 func (n *Nats) Publish(ctx context.Context, event relay.Event) error {
-	// TODO: 
-	// NATS doesn't natively take a context in the simple Publish call, 
+	// TODO:
+	// NATS doesn't natively take a context in the simple Publish call,
 	// but we can use it for timeout logic if needed.
 	return n.conn.Publish(event.Topic, event.Payload)
 }

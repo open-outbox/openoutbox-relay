@@ -23,12 +23,12 @@ func main() {
 
 	err := c.Invoke(func(engine *relay.Engine, api *relay.Server, logger *zap.Logger) {
 		defer func() { _ = logger.Sync() }()
-		
+
 		// Start API (Non-blocking)
 		api.Start()
 
 		log.Println("Relay Engine (DI) starting...")
-		
+
 		// Run Engine (Blocking)
 		if err := engine.Run(ctx); err != nil && err != context.Canceled {
 			log.Printf("Engine error: %v", err)

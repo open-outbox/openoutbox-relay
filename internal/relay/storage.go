@@ -17,12 +17,12 @@ type Storage interface {
 	// MarkFailed records a failure and increments the retry count.
 	MarkFailed(ctx context.Context, id string, reason string) error
 
-	// Gets the status of events 
+	// Gets the status of events
 	GetStats(ctx context.Context) (Stats, error)
 }
 
 type Stats struct {
-	Pending int `json:"pending"`
+	Pending  int `json:"pending"`
 	Retrying int `json:"retrying"`
-	Failed  int `json:"failed"`
+	Failed   int `json:"failed"`
 }

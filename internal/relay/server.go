@@ -17,7 +17,7 @@ type Server struct {
 
 func NewServer(s Storage, addr string, logger *zap.Logger) *Server {
 	mux := http.NewServeMux()
-	
+
 	srv := &Server{
 		storage: s,
 		server: &http.Server{

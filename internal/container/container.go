@@ -86,14 +86,14 @@ func BuildContainer() *dig.Container {
 
 	
 	// Provide Engine
-	c.Provide(func(s relay.Storage, p relay.Publisher, cfg *config.Config) *relay.Engine {
-		return relay.NewEngine(s, p, cfg.PollInterval)
+	c.Provide(func(s relay.Storage, p relay.Publisher, cfg *config.Config, logger *zap.Logger) *relay.Engine {
+		return relay.NewEngine(s, p, cfg.PollInterval, logger)
 	})
 
 		
 	// Provide API Server
-	c.Provide(func(s relay.Storage, cfg *config.Config) *relay.Server {
-		return relay.NewServer(s, cfg.ServerPort)
+	c.Provide(func(s relay.Storage, cfg *config.Config, logger *zap.Logger) *relay.Server {
+		return relay.NewServer(s, cfg.ServerPort, logger)
 	})
 
 	return c

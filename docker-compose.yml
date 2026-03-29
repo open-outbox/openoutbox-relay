@@ -2,23 +2,13 @@
 
 volumes:
   pg_data: {}
-  # redis_data: {}
+  redis_data: {}
 
 services:
 
   postgres:
     image: postgis/postgis:16-3.4
     restart: unless-stopped
-    # command:
-    #   - "postgres"
-    #   - "-c"
-    #   - "logging_collector=on"
-    #   - "-c"
-    #   - "log_directory=/var/log/postgresql/"
-    #   - "-c"
-    #   - "log_filename=postgresql.log"
-    #   - "-c"
-    #   - "log_statement=all"
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
@@ -40,13 +30,20 @@ services:
     networks:
       - default
 
-  # redis:
-  #   image: redis:6-alpine
-  #   command: redis-server --appendonly yes
-  #   ports:
-  #     - "6379:6379"
-  #   volumes:
-  #     - redis_data:/data
+  relay:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+
+  redis:
+    image: redis:6-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
 
   # nginx:
   #   image: nginx:alpine

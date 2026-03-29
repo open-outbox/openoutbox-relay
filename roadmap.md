@@ -4,7 +4,7 @@
 
 [X] Dependency Injection (uber-go/dig): Refactor main.go to use a container. This allows us to "swap" a NATS publisher for a Kafka one just by changing the provider function.
 
-[ ] Structured Logging (uber-go/zap): Move away from log.Printf. We need JSON logging with fields (e.g., {"level":"info", "event_id":"...", "module":"engine"}).
+[X] Structured Logging (uber-go/zap): Move away from log.Printf. We need JSON logging with fields (e.g., {"level":"info", "event_id":"...", "module":"engine"}).
 
 [ ] Viper Evolution: fully enable the remote providers for Consul and Etcd.
 
@@ -17,9 +17,9 @@
 
 [ ] Additional Publishers:
 
-[ ] Kafka: The industry heavy-hitter.
+[X] Kafka: The industry heavy-hitter.
 
-[ ] Redis: Using Redis Streams or Pub/Sub.
+[X] Redis: Using Redis Streams or Pub/Sub.
 
 [ ] RabbitMQ: For traditional enterprise messaging.
 

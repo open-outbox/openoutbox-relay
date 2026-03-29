@@ -26,9 +26,7 @@ func Load() (*Config, error) {
 	v := viper.New()
 
 	// 1. Set Defaults
-	v.SetDefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/postgres")
-	v.SetDefault("NATS_URL", "nats://localhost:4222")
-	v.SetDefault("POLL_INTERVAL", "1s")
+	v.SetDefault("POLL_INTERVAL", "500ms")
 	v.SetDefault("BATCH_SIZE", 10)
 	v.SetDefault("SERVER_PORT", ":8080")
 
@@ -43,6 +41,13 @@ func Load() (*Config, error) {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, err
 		}
+	}
+
+	// 4. Try to read .env (The local overrides)
+	v.SetConfigFile(".env")
+	v.SetConfigType("env")
+	if err := v.MergeInConfig(); err != nil {
+		// Ignore if .env doesn't exist
 	}
 
 	// 3. Unmarshal into our struct

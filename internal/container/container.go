@@ -20,6 +20,8 @@ func BuildContainer() *dig.Container {
 	// Storage Provider
 	c.Provide(func(cfg *config.Config) (relay.Storage, error) {
 		ctx := context.Background()
+
+		fmt.Printf("This is the type %s\n", cfg.PublisherURL)
 		
 		switch cfg.StorageType {
 		case "postgres":

@@ -9,6 +9,16 @@ import (
 	"github.com/open-outbox/relay/internal/publishers"
 	"github.com/open-outbox/relay/internal/relay"
 	"github.com/open-outbox/relay/internal/storage"
+	prometheus_client "github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/metric"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
+	oteltrace "go.opentelemetry.io/otel/trace" // Alias the API
 	"go.uber.org/dig"
 	"go.uber.org/zap"
 )
@@ -35,6 +45,58 @@ func BuildContainer() *dig.Container {
 			return nil, err
 		}
 		return logger, nil
+	})
+
+
+	// Inside BuildContainer...
+	c.Provide(func() (oteltrace.Tracer, error) {
+		// 1. Create an exporter (sending to stdout for now)
+		exporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+		if err != nil {
+			return nil, err
+		}
+
+		// 2. Define the resource (service name)
+		res, _ := resource.Merge(
+			resource.Default(),
+			resource.NewWithAttributes(
+				semconv.SchemaURL,
+				semconv.ServiceNameKey.String("outbox-relay"),
+			),
+		)
+
+		// 3. Create the Provider
+		tp := trace.NewTracerProvider(
+			trace.WithBatcher(exporter),
+			trace.WithResource(res),
+		)
+		
+		// Set global provider so libraries can use it
+		otel.SetTracerProvider(tp)
+
+		return tp.Tracer("outbox-relay-engine"), nil
+	})
+
+	c.Provide(func() (metric.Meter, error) {
+		// 1. Create the Prometheus exporter
+		// 1. Tell OTEL to use the Global Prometheus Registerer
+        // This is the "magic link" that connects OTEL to promhttp.Handler()
+        exporter, err := prometheus.New(
+            prometheus.WithRegisterer(prometheus_client.DefaultRegisterer),
+        )
+        if err != nil {
+            return nil, err
+        }
+
+        // 2. Setup the Provider
+        provider := sdkmetric.NewMeterProvider(
+            sdkmetric.WithReader(exporter),
+        )
+        
+        // 3. Set this as the GLOBAL Meter Provider (Optional but recommended)
+        otel.SetMeterProvider(provider)
+
+        return provider.Meter("open-outbox-relay"), nil
 	})
 
 	// Storage Provider
@@ -86,8 +148,8 @@ func BuildContainer() *dig.Container {
 
 	
 	// Provide Engine
-	c.Provide(func(s relay.Storage, p relay.Publisher, cfg *config.Config, logger *zap.Logger) *relay.Engine {
-		return relay.NewEngine(s, p, cfg.PollInterval, logger)
+	c.Provide(func(s relay.Storage, p relay.Publisher, cfg *config.Config, logger *zap.Logger, meter metric.Meter, tracer oteltrace.Tracer) *relay.Engine {
+		return relay.NewEngine(s, p, cfg.PollInterval, logger, meter, tracer)
 	})
 
 		

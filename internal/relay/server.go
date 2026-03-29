@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 )
 
@@ -27,6 +28,7 @@ func NewServer(s Storage, addr string, logger *zap.Logger) *Server {
 	}
 
 	mux.HandleFunc("/health", srv.handleHealth)
+	mux.Handle("/metrics", promhttp.Handler())
 	return srv
 }
 

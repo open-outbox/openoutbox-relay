@@ -149,7 +149,7 @@ func BuildContainer(rootCtx context.Context) *dig.Container {
 
 		// Provide Engine
 		func(s relay.Storage, p relay.Publisher, cfg *config.Config, logger *zap.Logger, metrics *relay.Metrics, tracer oteltrace.Tracer) *relay.Engine {
-			return relay.NewEngine(s, p, cfg.PollInterval, logger, metrics, tracer)
+			return relay.NewEngine(s, p, cfg.PollInterval, cfg.BatchSize, logger, metrics, tracer)
 		},
 
 		// Provide API Server

@@ -16,18 +16,20 @@ type Engine struct {
 	storage   Storage
 	publisher Publisher
 	interval  time.Duration
+	batchSize int
 	logger    *zap.Logger
 	metrics   *Metrics
 	tracer    oteltrace.Tracer
 }
 
 // NewEngine creates a ready-to-run Relay Engine.
-func NewEngine(s Storage, p Publisher, i time.Duration, l *zap.Logger, m *Metrics, t oteltrace.Tracer) *Engine {
+func NewEngine(s Storage, p Publisher, i time.Duration, b int, l *zap.Logger, m *Metrics, t oteltrace.Tracer) *Engine {
 
 	return &Engine{
 		storage:   s,
 		publisher: p,
 		interval:  i,
+		batchSize: b,
 		logger:    l.With(zap.String("module", "engine")),
 		metrics:   m,
 		tracer:    t,
@@ -56,7 +58,7 @@ func (e *Engine) process(ctx context.Context) error {
 	ctx, span := e.tracer.Start(ctx, "Engine.ProcessBatch")
 	defer span.End()
 	// 1. Fetch a batch of events (we'll start with 10)
-	events, err := e.storage.Fetch(ctx, 10)
+	events, err := e.storage.Fetch(ctx, e.batchSize)
 	if err != nil {
 		span.RecordError(err)
 		e.logger.Error("failed to fetch events", zap.Error(err))

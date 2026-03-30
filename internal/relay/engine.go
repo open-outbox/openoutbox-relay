@@ -67,11 +67,16 @@ func (e *Engine) process(ctx context.Context) error {
 
 	for _, event := range events {
 
-		_, childSpan := e.tracer.Start(ctx, "Publisher.Publish",
-			oteltrace.WithAttributes(
-				attribute.String("event_id", event.ID.String()),
-				attribute.String("type", event.Type),
-			))
+		select {
+		case <-ctx.Done():
+			// Shutdown requested!
+			// We stop processing the REST of the 1,000 events immediately.
+			e.logger.Info("shutdown signal received, stopping batch mid-way",
+				zap.Int("remaining", len(events)-100))
+			return ctx.Err()
+		default:
+			// No shutdown? Carry on.
+		}
 		// 2. Publish the event
 		if err := e.publisher.Publish(ctx, event); err != nil {
 			childSpan.RecordError(err)

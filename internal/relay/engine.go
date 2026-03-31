@@ -59,7 +59,7 @@ func (e *Engine) process(ctx context.Context) error {
 	defer span.End()
 	// 1. Fetch a batch of events (we'll start with 10)
 	events, err := e.storage.Fetch(ctx, e.batchSize)
-	if err != nil {
+	if err != nil && err != context.Canceled {
 		span.RecordError(err)
 		e.logger.Error("failed to fetch events", zap.Error(err))
 		return err // Could not connect to DB
@@ -106,7 +106,7 @@ func (e *Engine) process(ctx context.Context) error {
 		)
 
 		// 3. Mark as successfully processed
-		if err := e.storage.MarkDone(ctx, event.ID.String()); err != nil {
+		if err := e.storage.MarkDone(ctx, event.ID.String()); err != nil && err != context.Canceled {
 			e.logger.Warn("mark as done failed",
 				zap.String("event_id", event.ID.String()),
 				zap.String("type", event.Type),

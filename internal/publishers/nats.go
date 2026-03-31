@@ -28,6 +28,15 @@ func NewNats(url string) (*Nats, error) {
 
 // Publish sends the event payload to a NATS subject.
 func (n *Nats) Publish(ctx context.Context, event relay.Event) (relay.PublishResult, error) {
+
+	if n.conn.IsClosed() {
+		return relay.PublishResult{}, &relay.PublishError{
+			Err:         errors.New("nats: connection closed permanently"),
+			IsRetryable: false, // Requires manual pod restart or NewNats call
+			Code:        "NATS_FATAL_CLOSED",
+		}
+	}
+
 	err := n.conn.Publish(event.Type, event.Payload)
 
 	if err != nil {

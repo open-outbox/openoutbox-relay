@@ -37,7 +37,7 @@ func NewEngine(s Storage, p Publisher, i time.Duration, b int, l *zap.Logger, m 
 }
 
 // Run starts the polling loop. It stops when the context is cancelled.
-func (e *Engine) Run(ctx context.Context) error {
+func (e *Engine) Start(ctx context.Context) error {
 	ticker := time.NewTicker(e.interval)
 	defer ticker.Stop()
 

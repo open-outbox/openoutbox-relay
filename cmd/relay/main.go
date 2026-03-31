@@ -1,3 +1,6 @@
+// Package main is the entry point for the OpenOutbox Relay.
+// It sets up signal handling, builds the dependency injection container,
+// and manages the lifecycle of the relay engine and the HTTP server.
 package main
 
 import (
@@ -13,36 +16,35 @@ import (
 	"go.uber.org/zap"
 )
 
+// main initializes the application and starts the main execution loop.
 func main() {
-	// 1. Setup global context for shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// 2. Build the DI Container
 	c := container.BuildContainer(ctx)
 
-	err := c.Invoke(func(engine *relay.Engine, api *relay.Server, logger *zap.Logger) {
+	err := c.Invoke(func(engine *relay.Engine, api *relay.Server, logger *zap.Logger) error {
 		defer func() { _ = logger.Sync() }()
 
-		// Start API (Non-blocking)
+		logger.Info("Starting OpenOutbox Relay")
 		api.Start()
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := api.Stop(shutdownCtx); err != nil {
+				logger.Error("API shutdown error", zap.Error(err))
+			}
+		}()
 
-		log.Println("Relay Engine (DI) starting...")
-
-		// Run Engine (Blocking)
-		if err := engine.Run(ctx); err != nil && err != context.Canceled {
-			log.Printf("Engine error: %v", err)
+		if err := engine.Start(ctx); err != nil && err != context.Canceled {
+			return err
 		}
 
-		// Graceful Shutdown for API
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = api.Stop(shutdownCtx)
+		logger.Info("Relay process exited gracefully")
+		return nil
 	})
 
 	if err != nil {
-		log.Fatalf("Failed to start application: %v", err)
+		log.Fatalf("Relay terminated with error: %v", err)
 	}
-
-	log.Println("Relay exited cleanly.")
 }

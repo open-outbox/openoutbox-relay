@@ -77,6 +77,12 @@ func (e *Engine) process(ctx context.Context) error {
 		default:
 			// No shutdown? Carry on.
 		}
+
+		_, childSpan := e.tracer.Start(ctx, "Publisher.Publish",
+			oteltrace.WithAttributes(
+				attribute.String("event_id", event.ID.String()),
+				attribute.String("type", event.Type),
+			))
 		// 2. Publish the event
 		if err := e.publisher.Publish(ctx, event); err != nil {
 			childSpan.RecordError(err)

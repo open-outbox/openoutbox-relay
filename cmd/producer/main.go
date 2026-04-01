@@ -35,7 +35,11 @@ func main() {
 			id := uuid.New()
 			userID := rand.Intn(10000)
 			eventType := "user.signup"
-			payload := fmt.Sprintf(`{"user_id": %d, "email": "user-%d@example.com"}`, userID, userID)
+			payload := fmt.Sprintf(
+				`{"user_id": %d, "email": "user-%d@example.com"}`,
+				userID,
+				userID,
+			)
 
 			// We use the UserID as the PartitionKey to ensure
 			// all events for 'User 123' stay in order.

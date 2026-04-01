@@ -22,10 +22,10 @@ func NewKafka(brokers string) *Kafka {
 
 	return &Kafka{
 		writer: &kafka.Writer{
-			Addr:     kafka.TCP(brokerList...),
-			Balancer: &kafka.LeastBytes{},
-			//RequiredAcks: kafka.RequireAll,
-			//Async:        false,
+			Addr:         kafka.TCP(brokerList...),
+			Balancer:     &kafka.LeastBytes{},
+			RequiredAcks: kafka.RequireAll,
+			Async:        false,
 		},
 	}
 }

@@ -35,7 +35,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 		func(cfg *config.Config) (*zap.Logger, error) {
 			var logger *zap.Logger
 			var err error
-			if cfg.Environment == "production" {
+			if cfg.Environment == config.Production {
 				logger, err = zap.NewProduction()
 			} else {
 				logger, err = zap.NewDevelopment()

@@ -23,7 +23,15 @@ type Engine struct {
 }
 
 // NewEngine creates a ready-to-run Relay Engine.
-func NewEngine(s Storage, p Publisher, i time.Duration, b int, l *zap.Logger, m *Metrics, t oteltrace.Tracer) *Engine {
+func NewEngine(
+	s Storage,
+	p Publisher,
+	i time.Duration,
+	b int,
+	l *zap.Logger,
+	m *Metrics,
+	t oteltrace.Tracer,
+) *Engine {
 
 	return &Engine{
 		storage:   s,
@@ -110,7 +118,8 @@ func (e *Engine) process(ctx context.Context) error {
 		)
 
 		// 3. Mark as successfully processed
-		if err := e.storage.MarkDone(ctx, event.ID.String()); err != nil && err != context.Canceled {
+		if err := e.storage.MarkDone(ctx, event.ID.String()); err != nil &&
+			err != context.Canceled {
 			e.logger.Warn("mark as done failed",
 				zap.String("event_id", event.ID.String()),
 				zap.String("type", event.Type),

@@ -3,7 +3,9 @@ package relay
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
@@ -15,20 +17,28 @@ type Server struct {
 	logger  *zap.Logger
 }
 
-func NewServer(s Storage, addr string, logger *zap.Logger) *Server {
-	mux := http.NewServeMux()
+func registerHandlers(s *Server, mux *http.ServeMux) {
 
+	mux.HandleFunc("/health", s.handleHealth)
+	mux.Handle("/metrics", promhttp.Handler())
+}
+
+func NewServer(ctx context.Context, s Storage, addr string, logger *zap.Logger) *Server {
+
+	mux := http.NewServeMux()
 	srv := &Server{
 		storage: s,
+		logger:  logger,
 		server: &http.Server{
-			Addr:    addr,
-			Handler: mux,
+			Addr:         addr,
+			BaseContext:  func(net.Listener) context.Context { return ctx },
+			ReadTimeout:  time.Second,
+			WriteTimeout: 10 * time.Second,
+			Handler:      mux,
 		},
-		logger: logger,
 	}
+	registerHandlers(srv, mux)
 
-	mux.HandleFunc("/health", srv.handleHealth)
-	mux.Handle("/metrics", promhttp.Handler())
 	return srv
 }
 
@@ -54,6 +64,7 @@ func (s *Server) Start() error {
 		return err
 	}
 	return nil
+
 }
 
 // Stop gracefully shuts down the server.

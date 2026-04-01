@@ -10,6 +10,8 @@ type Storage interface {
 	// batchSize prevents the relay from overloading memory.
 	Fetch(ctx context.Context, batchSize int) ([]Event, error)
 
+	// Claim(ctx context.Context, batchSize int) ([]Event, error)
+
 	// MarkDone records that an event was successfully processed.
 	// In a real DB, this might delete the row or update 'status' to 'completed'.
 	MarkDone(ctx context.Context, id string) error
@@ -24,6 +26,6 @@ type Storage interface {
 type Stats struct {
 	Pending  int `json:"pending"`
 	Retrying int `json:"retrying"`
-	InFlight int `json:"retrying"`
+	InFlight int `json:"in_flight"`
 	Failed   int `json:"failed"`
 }

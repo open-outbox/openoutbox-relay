@@ -54,7 +54,8 @@ func (p *Postgres) ClaimBatch(
             e.event_type, 
             e.payload, 
             e.partition_key,
-            e.attempts;
+            e.attempts,
+			e.created_at;
     `
 
 	rows, err := p.pool.Query(ctx, query,
@@ -78,6 +79,7 @@ func (p *Postgres) ClaimBatch(
 			&e.Payload,
 			&e.PartitionKey,
 			&e.Attempts,
+			&e.CreatedAt,
 		)
 		if err != nil && err != context.Canceled {
 			return nil, fmt.Errorf("event scan error: %w", err)

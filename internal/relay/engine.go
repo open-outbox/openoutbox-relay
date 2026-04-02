@@ -81,84 +81,109 @@ func (e *Engine) Start(ctx context.Context) error {
 }
 
 func (e *Engine) process(ctx context.Context) error {
-	start := time.Now()
-	ctx, span := e.tracer.Start(ctx, "Engine.ProcessBatch")
+	// Start the Parent Span for the entire batch
+	ctx, span := e.tracer.Start(ctx, "Engine.Process",
+		trace.WithAttributes(attribute.Int("batch.size_requested", e.batchSize)))
 	defer span.End()
-	// 1. Fetch a batch of events (we'll start with 10)
+
+	// Claim a batch of events
 	events, err := e.storage.ClaimBatch(ctx, e.relayId, e.batchSize, e.leaseMinutes)
 	if err != nil && err != context.Canceled {
 		span.RecordError(err)
-		e.logger.Error("failed to fetch events", zap.Error(err))
-		return err // Could not connect to DB
+		span.SetStatus(codes.Error, err.Error())
+		e.logger.Error("failed to fetch events.", zap.Error(err))
+		return err
 	}
+
+	// Record number of claimed events
+	span.SetAttributes(attribute.Int("batch.size_actual", len(events)))
 
 	successEvents := make([]uuid.UUID, 0)
 	failedEvents := make([]FailedEvent, 0)
 
 	for _, event := range events {
-
 		select {
 		case <-ctx.Done():
-			// Shutdown requested!
-			// We stop processing the REST of the 1,000 events immediately.
-			e.logger.Info("shutdown signal received, stopping batch mid-way",
-				zap.Int("remaining", len(events)-100))
 			return ctx.Err()
 		default:
-			// No shutdown? Carry on.
 		}
 
-		_, childSpan := e.tracer.Start(ctx, "Publisher.Publish",
+		// Create a new Context from the child span
+		// This allows the Publisher (Kafka/NATS) to attach its own spans to this one.
+		publishCtx, childSpan := e.tracer.Start(ctx, "Publisher.Publish",
 			trace.WithAttributes(
-				attribute.String("event_id", event.ID.String()),
-				attribute.String("type", event.Type),
+				attribute.String("event.id", event.ID.String()),
+				attribute.String("event.type", event.Type),
+				attribute.Int("event.attempt", event.Attempts),
 			))
 
-		res, err := e.publisher.Publish(ctx, event)
-		//Temporary handling of the result
-		e.logger.Info("Publish result", zap.String("Status", string(rune(res.Status))))
+		// Publish the event
+		publishStart := time.Now()
+		res, err := e.publisher.Publish(publishCtx, event)
 
-		if err != nil {
+		if err != nil && err != context.Canceled {
+			// Add event to failed events
+			failedEvents = append(failedEvents, e.assessFailure(event, err))
+
+			e.metrics.Failed.Add(ctx, 1)
+
 			childSpan.RecordError(err)
-			childSpan.SetStatus(codes.Error, "publish failed")
-			childSpan.End() // End child
+			childSpan.SetStatus(codes.Error, err.Error())
+			childSpan.End()
 			e.logger.Warn("publish failed",
 				zap.String("event_id", event.ID.String()),
 				zap.String("type", event.Type),
 				zap.Error(err),
 			)
-			e.metrics.Failed.Add(ctx, 1)
-			failedEvents = append(failedEvents, e.assessFailure(event, err))
+
 			continue
 		}
 
+		successEvents = append(successEvents, event.ID)
+
 		e.metrics.Delivered.Add(ctx, 1)
+		// Record individual event latency (Time from Outbox creation to successful Publish)
+		e.metrics.Latency.Record(ctx, time.Since(event.CreatedAt).Seconds())
+
+		// Success Telemetry
+		childSpan.SetStatus(codes.Ok, "success")
+		childSpan.SetAttributes(attribute.String("provider.id", res.ProviderID))
+		childSpan.SetAttributes(attribute.String("publish.duration", time.Since(publishStart).String()))
+		childSpan.End()
+
 		e.logger.Info("event published",
 			zap.String("event_id", event.ID.String()),
-			zap.Duration("elapsed", time.Since(event.CreatedAt)),
+			zap.Duration("publish_duration", time.Since(publishStart)),
 		)
-
-		// 3. Mark as successfully processed
-		successEvents = append(successEvents, event.ID)
-		childSpan.SetStatus(codes.Ok, "success")
-		childSpan.End() // End child
-		e.metrics.Latency.Record(ctx, time.Since(start).Seconds())
 	}
 
 	if len(successEvents) > 0 {
-		if err := e.storage.MarkDeliveredBatch(ctx, successEvents, e.relayId); err != nil &&
-			err != context.Canceled {
-			e.logger.Error("failed to mark success batch", zap.Error(err))
+		_, finalizeSpan := e.tracer.Start(ctx, "Storage.MarkDeliveredBatch")
+		finalizeSpan.SetAttributes(attribute.Int("batch.size", len(successEvents)))
+		if err := e.storage.MarkDeliveredBatch(ctx, successEvents, e.relayId); err != nil && err != context.Canceled {
+			finalizeSpan.RecordError(err)
+			finalizeSpan.SetStatus(codes.Error, err.Error())
+			finalizeSpan.End()
+			e.logger.Error("failed to mark batch as delivered", zap.Error(err))
 			return err
 		}
+		finalizeSpan.End()
+
 	}
 
 	if len(failedEvents) > 0 {
-		if err := e.storage.MarkFailedBatch(ctx, failedEvents, e.relayId); err != nil &&
-			err != context.Canceled {
+
+		_, failSpan := e.tracer.Start(ctx, "Storage.MarkFailedBatch")
+		failSpan.SetAttributes(attribute.Int("batch.size", len(failedEvents)))
+		if err := e.storage.MarkFailedBatch(ctx, failedEvents, e.relayId); err != nil && err != context.Canceled {
+			failSpan.RecordError(err)
+			failSpan.SetStatus(codes.Error, err.Error())
+			failSpan.End()
 			e.logger.Error("failed to mark failure batch", zap.Error(err))
 			return err
 		}
+		failSpan.End()
+
 	}
 
 	return nil

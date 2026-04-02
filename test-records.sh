@@ -21,6 +21,7 @@ CREATE TABLE outbox_events (
 );
 
 -- 3. Re-add the high-performance indexes
+CREATE INDEX idx_outbox_processing_v1 ON outbox_events (status, created_at) WHERE status = 'PENDING';
 CREATE INDEX idx_outbox_processing ON outbox_events (status, available_at) WHERE status = 'PENDING';
 CREATE INDEX idx_outbox_reaper ON outbox_events (locked_at) WHERE status = 'DELIVERING';
 "

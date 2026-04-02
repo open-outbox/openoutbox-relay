@@ -34,6 +34,11 @@ func (m *MockStorage) MarkFailedBatch(ctx context.Context, failed []FailedEvent,
 	return args.Error(0)
 }
 
+func (m *MockStorage) Close() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
 type MockPublisher struct {
 	mock.Mock
 }
@@ -41,6 +46,11 @@ type MockPublisher struct {
 func (m *MockPublisher) Publish(ctx context.Context, event Event) (PublishResult, error) {
 	args := m.Called(ctx, event)
 	return args.Get(0).(PublishResult), args.Error(1)
+}
+
+func (m *MockPublisher) Close() error {
+	args := m.Called()
+	return args.Error(0)
 }
 
 func TestRetryPolicy_NextBackoff(t *testing.T) {

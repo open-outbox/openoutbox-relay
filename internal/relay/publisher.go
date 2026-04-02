@@ -77,4 +77,6 @@ func (e *PublishError) Unwrap() error { return e.Err }
 type Publisher interface {
 	// Publish blocks until the downstream system acknowledges receipt (ACK/NACK).
 	Publish(ctx context.Context, event Event) (PublishResult, error)
+
+	Close() error
 }

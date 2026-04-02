@@ -27,3 +27,7 @@ func (s *Null) Publish(ctx context.Context, event relay.Event) (relay.PublishRes
 		Metadata:   nil,
 	}, nil
 }
+
+func (s *Null) Close() error {
+	return nil
+}

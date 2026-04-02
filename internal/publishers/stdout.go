@@ -40,3 +40,7 @@ func (s *Stdout) Publish(ctx context.Context, event relay.Event) (relay.PublishR
 		ProviderID: event.ID.String(),
 	}, nil
 }
+
+func (s *Stdout) Close() error {
+	return nil
+}

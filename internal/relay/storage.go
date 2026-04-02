@@ -22,6 +22,8 @@ type Storage interface {
 
 	// MarkFailedBatch handles both Retries (PENDING + Backoff) and Quarantine (DEAD).
 	MarkFailedBatch(ctx context.Context, failures []FailedEvent, relayID string) error
+
+	Close() error
 }
 
 type Stats struct {

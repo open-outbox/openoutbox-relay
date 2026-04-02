@@ -40,8 +40,26 @@ func run() error {
 	}
 
 	return c.Invoke(
-		func(engine *relay.Engine, api *relay.Server, logger *zap.Logger, tp *telemetry.OTelProviders) error {
+		func(
+			engine *relay.Engine,
+			api *relay.Server,
+			storage relay.Storage,
+			publisher relay.Publisher,
+			logger *zap.Logger,
+			tp *telemetry.OTelProviders,
+		) error {
+
 			defer func() { _ = logger.Sync() }()
+
+			defer func() {
+				logger.Info("Shutting down storage and publisher...")
+				if err := storage.Close(); err != nil {
+					logger.Error("Failed to close storage", zap.Error(err))
+				}
+				if err := publisher.Close(); err != nil {
+					logger.Error("Failed to close publisher", zap.Error(err))
+				}
+			}()
 
 			defer func() {
 				logger.Info("Flushing telemetry data...")

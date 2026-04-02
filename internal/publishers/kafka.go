@@ -54,6 +54,22 @@ func (k *Kafka) Publish(ctx context.Context, event relay.Event) (relay.PublishRe
 	}, nil
 }
 
+// Close gracefully shuts down the Kafka writer.
+// It ensures all buffered messages are flushed to the brokers before closing.
+func (k *Kafka) Close() error {
+	if k.writer == nil {
+		return nil
+	}
+
+	// k.writer.Close() returns an error if the flush fails or if
+	// the underlying connections cannot be closed cleanly.
+	if err := k.writer.Close(); err != nil {
+		return fmt.Errorf("failed to close kafka writer: %w", err)
+	}
+
+	return nil
+}
+
 // TODO: Sanity check
 func isKafkaErrorRetryable(err error) bool {
 	if err == nil {
@@ -80,9 +96,4 @@ func isKafkaErrorRetryable(err error) bool {
 	}
 
 	return false
-}
-
-// Close gracefully shuts down the Kafka writer.
-func (k *Kafka) Close() error {
-	return k.writer.Close()
 }

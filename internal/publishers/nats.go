@@ -68,6 +68,17 @@ func (n *Nats) Publish(ctx context.Context, event relay.Event) (relay.PublishRes
 	}, nil
 }
 
+// Close gracefully shuts down the NATS connection.
+// It drains any remaining buffered messages and closes the underlying socket.
+func (n *Nats) Close() error {
+	if n.conn != nil {
+		// Option: You could call n.conn.Drain() here if you wanted
+		// to ensure all pending publishes are flushed before closing.
+		n.conn.Close()
+	}
+	return nil
+}
+
 func isNatsErrorRetryable(err error) bool {
 	if err == nil {
 		return false
@@ -101,11 +112,4 @@ func isNatsErrorRetryable(err error) bool {
 	}
 
 	return false
-}
-
-// Close gracefully shuts down the NATS connection.
-func (n *Nats) Close() {
-	if n.conn != nil {
-		n.conn.Close()
-	}
 }

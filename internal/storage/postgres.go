@@ -64,7 +64,7 @@ func (p *Postgres) ClaimBatch(
 		batchSize,
 		relayID,
 	)
-	if err != nil {
+	if err != nil && err != context.Canceled {
 		return nil, fmt.Errorf("failed to claim batch: %w", err)
 	}
 	defer rows.Close()
@@ -200,23 +200,7 @@ func (p *Postgres) MarkFailedBatch(
 	return nil
 }
 
-// MarkDone updates the status to 'completed'.
-func (p *Postgres) MarkDone(ctx context.Context, id string) error {
-	query := `UPDATE outbox_events SET status = $2, updated_at = NOW() WHERE event_id = $1`
-	_, err := p.pool.Exec(ctx, query, id, relay.StatusDelivered)
-	return err
-}
-
-func (p *Postgres) MarkFailed(ctx context.Context, id string, reason string) error {
-	query := `
-		UPDATE outbox_events 
-		SET attempts = attempts + 1, 
-		    last_error = $2,
-		    updated_at = NOW() 
-		WHERE event_id = $1`
-	_, err := p.pool.Exec(ctx, query, id, reason)
-	return err
-}
+func (p *Postgres) Close() error { p.pool.Close(); return nil }
 
 func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
 	var stats relay.Stats

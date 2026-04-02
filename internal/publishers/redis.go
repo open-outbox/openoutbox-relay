@@ -117,9 +117,18 @@ func (r *Redis) isRetryable(err error) bool {
 }
 
 // Close gracefully shuts down the Redis client and its connection pool.
+// It returns an error if any of the underlying pool connections
+// fail to close cleanly.
 func (r *Redis) Close() error {
-	if r.client != nil {
-		return r.client.Close()
+	if r.client == nil {
+		return nil
 	}
+
+	// go-redis/v9's Close() returns an error if the client
+	// is already closed or if there's an issue closing the pool.
+	if err := r.client.Close(); err != nil {
+		return fmt.Errorf("failed to close redis client: %w", err)
+	}
+
 	return nil
 }

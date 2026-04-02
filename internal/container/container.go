@@ -96,6 +96,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				p,
 				cfg.PollInterval,
 				cfg.BatchSize,
+				cfg.LeaseMinutes,
 				logger,
 				metrics,
 				traceProvider,

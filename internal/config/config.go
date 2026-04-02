@@ -26,8 +26,10 @@ type Config struct {
 	// Tuning
 	PollInterval time.Duration `mapstructure:"POLL_INTERVAL"`
 	BatchSize    int           `mapstructure:"BATCH_SIZE"`
+	LeaseMinutes int           `mapstructure:"LEASE_MINUTES"`
 	ServerPort   string        `mapstructure:"SERVER_PORT"`
 	Environment  Environment   `mapstructure:"ENVIRONMENT"`
+	RELAY_ID     string        `mapstructure:"RELAY_ID"`
 }
 
 func Load() (*Config, error) {
@@ -38,6 +40,7 @@ func Load() (*Config, error) {
 	v.SetDefault("PUBLISHER_TYPE", "stdout")
 	v.SetDefault("POLL_INTERVAL", "500ms")
 	v.SetDefault("BATCH_SIZE", 100)
+	v.SetDefault("LEASE_MINUTES", 3)
 	v.SetDefault("SERVER_PORT", ":8080")
 	v.SetDefault("ENVIRONMENT", Production)
 

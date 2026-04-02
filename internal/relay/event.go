@@ -35,3 +35,11 @@ type Event struct {
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }
+
+type FailedEvent struct {
+	ID          uuid.UUID `json:"id"           db:"id"`
+	NewStatus   Status    `json:"new_status"   db:"status"`
+	AvailableAt time.Time `json:"available_at" db:"available_at"`
+	Attempts    int       `json:"attempts"     db:"attempts"`
+	LastError   string    `json:"last_error"   db:"last_error"`
+}

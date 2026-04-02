@@ -3,8 +3,10 @@ package relay
 import (
 	"context"
 	"log"
+	"math/rand"
 	"time"
 
+	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
@@ -16,14 +18,17 @@ const instrumentationName = "github.com/open-outbox/relay/engine"
 
 // Engine coordinates the movement of events from Storage to Publisher.
 type Engine struct {
-	storage   Storage
-	publisher Publisher
-	interval  time.Duration
-	batchSize int
-	logger    *zap.Logger
-	metrics   *Metrics
-	tracer    trace.Tracer
-	meter     metric.Meter
+	relayId      string
+	storage      Storage
+	publisher    Publisher
+	interval     time.Duration
+	leaseMinutes int
+	batchSize    int
+	policy       RetryPolicy
+	logger       *zap.Logger
+	metrics      *Metrics
+	tracer       trace.Tracer
+	meter        metric.Meter
 }
 
 // NewEngine creates a ready-to-run Relay Engine.
@@ -32,6 +37,7 @@ func NewEngine(
 	publisher Publisher,
 	interval time.Duration,
 	batchSize int,
+	leaseMinutes int,
 	logger *zap.Logger,
 	metrics *Metrics,
 	traceProvider trace.TracerProvider,
@@ -39,14 +45,21 @@ func NewEngine(
 ) *Engine {
 
 	return &Engine{
-		storage:   storage,
-		publisher: publisher,
-		interval:  interval,
-		batchSize: batchSize,
-		logger:    logger.With(zap.String("module", "engine")),
-		metrics:   metrics,
-		tracer:    traceProvider.Tracer(instrumentationName),
-		meter:     meterProvider.Meter(instrumentationName),
+		relayId:      "change latter",
+		storage:      storage,
+		publisher:    publisher,
+		interval:     interval,
+		leaseMinutes: leaseMinutes,
+		batchSize:    batchSize,
+		logger:       logger.With(zap.String("module", "engine")),
+		metrics:      metrics,
+		tracer:       traceProvider.Tracer(instrumentationName),
+		meter:        meterProvider.Meter(instrumentationName),
+		policy: RetryPolicy{
+			MaxAttempts: 10,
+			BaseDelay:   1 * time.Second,
+			MaxDelay:    24 * time.Hour,
+		},
 	}
 }
 
@@ -72,12 +85,15 @@ func (e *Engine) process(ctx context.Context) error {
 	ctx, span := e.tracer.Start(ctx, "Engine.ProcessBatch")
 	defer span.End()
 	// 1. Fetch a batch of events (we'll start with 10)
-	events, err := e.storage.Fetch(ctx, e.batchSize)
+	events, err := e.storage.ClaimBatch(ctx, e.relayId, e.batchSize, e.leaseMinutes)
 	if err != nil && err != context.Canceled {
 		span.RecordError(err)
 		e.logger.Error("failed to fetch events", zap.Error(err))
 		return err // Could not connect to DB
 	}
+
+	successEvents := make([]uuid.UUID, 0)
+	failedEvents := make([]FailedEvent, 0)
 
 	for _, event := range events {
 
@@ -112,8 +128,7 @@ func (e *Engine) process(ctx context.Context) error {
 				zap.Error(err),
 			)
 			e.metrics.Failed.Add(ctx, 1)
-			// Instead of just 'continue', we tell the DB it failed
-			_ = e.storage.MarkFailed(ctx, event.ID.String(), err.Error())
+			failedEvents = append(failedEvents, e.assessFailure(event, err))
 			continue
 		}
 
@@ -124,18 +139,67 @@ func (e *Engine) process(ctx context.Context) error {
 		)
 
 		// 3. Mark as successfully processed
-		if err := e.storage.MarkDone(ctx, event.ID.String()); err != nil &&
-			err != context.Canceled {
-			e.logger.Warn("mark as done failed",
-				zap.String("event_id", event.ID.String()),
-				zap.String("type", event.Type),
-				zap.Error(err),
-			)
-		}
+		successEvents = append(successEvents, event.ID)
 		childSpan.SetStatus(codes.Ok, "success")
 		childSpan.End() // End child
 		e.metrics.Latency.Record(ctx, time.Since(start).Seconds())
 	}
 
+	// if err := e.storage.MarkDone(ctx, event.ID.String()); err != nil &&
+	// 	err != context.Canceled {
+	// 	e.logger.Warn("mark as done failed",
+	// 		zap.String("event_id", event.ID.String()),
+	// 		zap.String("type", event.Type),
+	// 		zap.Error(err),
+	// 	)
+	// }
+
+	// Instead of just 'continue', we tell the DB it failed
+	// _ = e.storage.MarkFailed(ctx, event.ID.String(), err.Error())
+
 	return nil
+}
+
+func (e *Engine) assessFailure(event Event, publishError error) FailedEvent {
+	nextAttempts := event.Attempts + 1
+	delay, shouldRetry := e.policy.NextBackoff(nextAttempts)
+
+	result := FailedEvent{
+		ID:        event.ID,
+		Attempts:  nextAttempts,
+		LastError: publishError.Error(),
+	}
+
+	if shouldRetry {
+		result.NewStatus = StatusPending
+		result.AvailableAt = time.Now().Add(delay)
+	} else {
+		result.NewStatus = StatusDead
+	}
+
+	return result
+}
+
+type RetryPolicy struct {
+	MaxAttempts int
+	BaseDelay   time.Duration
+	MaxDelay    time.Duration
+}
+
+func (p RetryPolicy) NextBackoff(attempts int) (time.Duration, bool) {
+	if attempts >= p.MaxAttempts {
+		return 0, false
+	}
+
+	// Exponential math: 2^(attempts-1)
+	delay := p.BaseDelay * time.Duration(1<<(uint(attempts-1)))
+
+	if delay > p.MaxDelay {
+		delay = p.MaxDelay
+	}
+
+	//add a 10% random variation to prevent Thundering Herd
+	jitter := time.Duration(rand.Int63n(int64(delay / 10)))
+
+	return delay + jitter, true
 }

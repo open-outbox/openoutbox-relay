@@ -17,11 +17,17 @@ CREATE TABLE outbox_events (
     locked_at     TIMESTAMPTZ,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT check_valid_status CHECK (status IN ('PENDING', 'DELIVERING', 'DELIVERED', 'DEAD'))
+    
+    CONSTRAINT check_valid_status CHECK (
+        status IN ('PENDING', 'DELIVERING', 'DELIVERED', 'DEAD')
+    )
 );
 
--- 3. Re-add the high-performance indexes
-CREATE INDEX idx_outbox_processing_v1 ON outbox_events (status, created_at) WHERE status = 'PENDING';
-CREATE INDEX idx_outbox_processing ON outbox_events (status, available_at) WHERE status = 'PENDING';
-CREATE INDEX idx_outbox_reaper ON outbox_events (locked_at) WHERE status = 'DELIVERING';
+CREATE INDEX idx_outbox_processing_queue 
+ON outbox_events (available_at ASC, created_at ASC)
+WHERE status = 'PENDING';
+
+CREATE INDEX idx_outbox_stuck_leases 
+ON outbox_events (locked_at) 
+WHERE status = 'DELIVERING';
 "

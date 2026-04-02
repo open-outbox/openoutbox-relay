@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -143,4 +144,58 @@ func TestEngine_Process_HappyPath(t *testing.T) {
 	assert.NoError(t, err)
 	mockStorage.AssertExpectations(t)
 	mockPublisher.AssertExpectations(t)
+}
+
+func TestEngine_Process_MixedBatch(t *testing.T) {
+	mockStorage := new(MockStorage)
+	mockPublisher := new(MockPublisher)
+
+	id1, id2 := uuid.New(), uuid.New()
+	event1 := Event{ID: id1, Type: "success.event"}
+	event2 := Event{ID: id2, Type: "fail.event"}
+
+	// 1. Return BOTH events
+	mockStorage.On("ClaimBatch", mock.Anything, "test-relay", 10, 5).
+		Return([]Event{event1, event2}, nil)
+
+	// 2. Event 1: Publish Success
+	mockPublisher.On("Publish", mock.Anything, event1).
+		Return(PublishResult{Status: 200}, nil)
+
+	// 3. Event 2: Publish Failure
+	mockPublisher.On("Publish", mock.Anything, event2).
+		Return(PublishResult{}, errors.New("network error"))
+
+	// 4. Verify BOTH storage updates happen
+	// Success side:
+	mockStorage.On("MarkDeliveredBatch", mock.Anything, []uuid.UUID{id1}, "test-relay").
+		Return(nil)
+
+	// Failure side: (Notice we check for id2 here)
+	mockStorage.On("MarkFailedBatch", mock.Anything, mock.MatchedBy(func(failed []FailedEvent) bool {
+		return len(failed) == 1 && failed[0].ID == id2
+	}), "test-relay").Return(nil)
+
+	// Initialize & Run
+	// 3. Initialize Engine
+	// (Using no-op providers for metrics/tracing to keep it simple)
+	metrics, err := NewMetrics(metricnoop.NewMeterProvider())
+	assert.NoError(t, err)
+
+	e := NewEngine(
+		mockStorage,
+		mockPublisher,
+		1*time.Second,
+		10,
+		5,
+		zap.NewNop(),
+		metrics, // Ensure your Metrics struct handles nil or use a mock
+		tracenoop.NewTracerProvider(),
+		metricnoop.NewMeterProvider(),
+	)
+	e.relayId = "test-relay"
+	err = e.process(context.Background())
+
+	assert.NoError(t, err)
+	mockStorage.AssertExpectations(t)
 }

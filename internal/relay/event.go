@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,11 +21,11 @@ func (s Status) IsTerminal() bool {
 }
 
 type Event struct {
-	ID           uuid.UUID      `db:"event_id"      json:"id"`
-	Type         string         `db:"event_type"    json:"type"`
-	PartitionKey string         `db:"partition_key" json:"partition_key"`
-	Payload      []byte         `db:"payload"       json:"payload"`
-	Headers      map[string]any `db:"headers"       json:"headers"`
+	ID           uuid.UUID       `db:"event_id"      json:"id"`
+	Type         string          `db:"event_type"    json:"type"`
+	PartitionKey string          `db:"partition_key" json:"partition_key"`
+	Payload      []byte          `db:"payload"       json:"payload"`
+	Headers      json.RawMessage `db:"headers"       json:"headers"`
 
 	// Delivery status
 	Attempts int `db:"attempts"   json:"attempts"`

@@ -149,6 +149,7 @@ func (e *Engine) process(ctx context.Context) error {
 	}
 	e.metrics.StorageLatency.Record(ctx, time.Since(claimStart).Seconds(),
 		metric.WithAttributes(attribute.String("op", "claim")))
+	e.metrics.BatchSize.Record(ctx, int64(len(events)))
 
 	// Record number of claimed events
 	span.SetAttributes(attribute.Int("batch.size_actual", len(events)))

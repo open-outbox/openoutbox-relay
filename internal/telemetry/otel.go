@@ -105,7 +105,8 @@ func newTracerProvider(res *resource.Resource) (*trace.TracerProvider, error) {
 
 func newMeterProvider(res *resource.Resource) (*metric.MeterProvider, error) {
 	ctx := context.Background()
-	var customBuckets = []float64{
+	batchBuckets := []float64{1, 5, 10, 25, 50, 75, 100, 250, 500, 1000}
+	customBuckets := []float64{
 		.0005, // 500µs (Micro-latencies)
 		.001,  // 1ms
 		.0025, // 2.5ms
@@ -129,6 +130,14 @@ func newMeterProvider(res *resource.Resource) (*metric.MeterProvider, error) {
 			},
 		},
 	)
+	batchView := metric.NewView(
+		metric.Instrument{Name: "openoutbox.events.batch_size"},
+		metric.Stream{
+			Aggregation: metric.AggregationExplicitBucketHistogram{
+				Boundaries: batchBuckets,
+			},
+		},
+	)
 	metricReader, err := autoexport.NewMetricReader(ctx)
 	if err != nil {
 		return nil, err
@@ -138,6 +147,7 @@ func newMeterProvider(res *resource.Resource) (*metric.MeterProvider, error) {
 		metric.WithResource(res),
 		metric.WithReader(metricReader),
 		metric.WithView(latencyView),
+		metric.WithView(batchView),
 	)
 
 	return mp, nil

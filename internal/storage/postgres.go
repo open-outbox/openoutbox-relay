@@ -209,7 +209,10 @@ func (p *Postgres) ReapExpiredLeases(ctx context.Context, leaseTimeout time.Dura
             SELECT event_id 
             FROM outbox_events
             WHERE status = 'DELIVERING'
-              AND locked_at < (now() - $1::interval)
+				AND (
+					locked_at < (now() - $1::interval) 
+					OR locked_at IS NULL
+				)
             ORDER BY locked_at ASC
             LIMIT $2
             FOR UPDATE SKIP LOCKED

@@ -14,7 +14,10 @@ import (
 	"go.uber.org/zap"
 )
 
-const instrumentationName = "github.com/open-outbox/relay/engine"
+const (
+	instrumentationName  = "github.com/open-outbox/relay/engine"
+	defaultWatchInterval = 30 * time.Second
+)
 
 // Engine coordinates the movement of events from Storage to Publisher.
 type Engine struct {
@@ -66,6 +69,9 @@ func NewEngine(
 // Run starts the polling loop. It stops when the context is cancelled.
 func (e *Engine) Start(ctx context.Context) error {
 	ticker := time.NewTicker(e.interval)
+
+	go e.watchBacklog(ctx)
+
 	defer ticker.Stop()
 
 	for {
@@ -80,12 +86,30 @@ func (e *Engine) Start(ctx context.Context) error {
 	}
 }
 
+func (e *Engine) watchBacklog(ctx context.Context) {
+	ticker := time.NewTicker(defaultWatchInterval)
+	defer ticker.Stop()
+	for {
+		e.updateBacklogMetrics(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			e.updateBacklogMetrics(ctx)
+		}
+	}
+}
+
 func (e *Engine) process(ctx context.Context) error {
+
+	e.logger.Debug("Engine processing...")
+
 	// Start the Parent Span for the entire batch
 	ctx, span := e.tracer.Start(ctx, "Engine.Process",
 		trace.WithAttributes(attribute.Int("batch.size_requested", e.batchSize)))
 	defer span.End()
 
+	claimStart := time.Now()
 	// Claim a batch of events
 	events, err := e.storage.ClaimBatch(ctx, e.relayId, e.batchSize, e.leaseMinutes)
 	if err != nil && err != context.Canceled {
@@ -94,6 +118,8 @@ func (e *Engine) process(ctx context.Context) error {
 		e.logger.Error("failed to fetch events.", zap.Error(err))
 		return err
 	}
+	e.metrics.StorageLatency.Record(ctx, time.Since(claimStart).Seconds(),
+		metric.WithAttributes(attribute.String("op", "claim")))
 
 	// Record number of claimed events
 	span.SetAttributes(attribute.Int("batch.size_actual", len(events)))
@@ -119,13 +145,17 @@ func (e *Engine) process(ctx context.Context) error {
 
 		// Publish the event
 		publishStart := time.Now()
+
 		res, err := e.publisher.Publish(publishCtx, event)
+
+		e.metrics.PublisherLatency.Record(ctx, time.Since(publishStart).Seconds(),
+			metric.WithAttributes(attribute.String("type", event.Type)))
 
 		if err != nil && err != context.Canceled {
 			// Add event to failed events
 			failedEvents = append(failedEvents, e.assessFailure(event, err))
 
-			e.metrics.Failed.Add(ctx, 1)
+			e.metrics.EventsTotal.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "failed")))
 
 			childSpan.RecordError(err)
 			childSpan.SetStatus(codes.Error, err.Error())
@@ -141,9 +171,9 @@ func (e *Engine) process(ctx context.Context) error {
 
 		successEvents = append(successEvents, event.ID)
 
-		e.metrics.Delivered.Add(ctx, 1)
-		// Record individual event latency (Time from Outbox creation to successful Publish)
-		e.metrics.Latency.Record(ctx, time.Since(event.CreatedAt).Seconds())
+		e.metrics.EndToEndLatency.Record(ctx, time.Since(event.CreatedAt).Seconds(),
+			metric.WithAttributes(attribute.String("type", event.Type)))
+		e.metrics.EventsTotal.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "success")))
 
 		// Success Telemetry
 		childSpan.SetStatus(codes.Ok, "success")
@@ -160,7 +190,22 @@ func (e *Engine) process(ctx context.Context) error {
 	if len(successEvents) > 0 {
 		_, finalizeSpan := e.tracer.Start(ctx, "Storage.MarkDeliveredBatch")
 		finalizeSpan.SetAttributes(attribute.Int("batch.size", len(successEvents)))
-		if err := e.storage.MarkDeliveredBatch(ctx, successEvents, e.relayId); err != nil && err != context.Canceled {
+
+		finalizeStart := time.Now()
+		err := e.storage.MarkDeliveredBatch(ctx, successEvents, e.relayId)
+
+		status := "success"
+		if err != nil {
+			status = "error"
+		}
+		e.metrics.StorageLatency.Record(ctx, time.Since(finalizeStart).Seconds(),
+			metric.WithAttributes(
+				attribute.String("op", "mark_delivered"),
+				attribute.String("status", status),
+			),
+		)
+
+		if err != nil && err != context.Canceled {
 			finalizeSpan.RecordError(err)
 			finalizeSpan.SetStatus(codes.Error, err.Error())
 			finalizeSpan.End()
@@ -172,10 +217,25 @@ func (e *Engine) process(ctx context.Context) error {
 	}
 
 	if len(failedEvents) > 0 {
-
 		_, failSpan := e.tracer.Start(ctx, "Storage.MarkFailedBatch")
 		failSpan.SetAttributes(attribute.Int("batch.size", len(failedEvents)))
-		if err := e.storage.MarkFailedBatch(ctx, failedEvents, e.relayId); err != nil && err != context.Canceled {
+
+		failStart := time.Now()
+		err := e.storage.MarkFailedBatch(ctx, failedEvents, e.relayId)
+
+		// Record Database Latency for the Failure Update
+		status := "success"
+		if err != nil {
+			status = "error"
+		}
+		e.metrics.StorageLatency.Record(ctx, time.Since(failStart).Seconds(),
+			metric.WithAttributes(
+				attribute.String("op", "mark_failed"),
+				attribute.String("status", status),
+			),
+		)
+
+		if err != nil && err != context.Canceled {
 			failSpan.RecordError(err)
 			failSpan.SetStatus(codes.Error, err.Error())
 			failSpan.End()
@@ -183,7 +243,6 @@ func (e *Engine) process(ctx context.Context) error {
 			return err
 		}
 		failSpan.End()
-
 	}
 
 	return nil
@@ -207,6 +266,22 @@ func (e *Engine) assessFailure(event Event, publishError error) FailedEvent {
 	}
 
 	return result
+}
+
+func (e *Engine) updateBacklogMetrics(ctx context.Context) {
+
+	stats, err := e.storage.GetStats(ctx)
+	if err != nil && err != context.Canceled {
+
+		e.logger.Warn("telemetry: failed to retrieve backlog stats",
+			zap.Error(err),
+			zap.String("relay_id", e.relayId),
+		)
+		return
+	}
+
+	e.metrics.PendingGauge.Record(ctx, stats.PendingCount)
+	e.metrics.OldestPendingSeconds.Record(ctx, stats.OldestAgeSec)
 }
 
 type RetryPolicy struct {

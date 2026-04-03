@@ -23,12 +23,12 @@ type Storage interface {
 	// MarkFailedBatch handles both Retries (PENDING + Backoff) and Quarantine (DEAD).
 	MarkFailedBatch(ctx context.Context, failures []FailedEvent, relayID string) error
 
+	GetStats(ctx context.Context) (Stats, error)
+
 	Close() error
 }
 
 type Stats struct {
-	Pending  int `json:"pending"`
-	Retrying int `json:"retrying"`
-	InFlight int `json:"in_flight"`
-	Failed   int `json:"failed"`
+	PendingCount int64   `json:"pending"`
+	OldestAgeSec int64 `json:"oldest_age_sec"`
 }

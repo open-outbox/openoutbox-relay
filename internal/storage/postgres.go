@@ -202,24 +202,22 @@ func (p *Postgres) MarkFailedBatch(
 	return nil
 }
 
-func (p *Postgres) Close() error { p.pool.Close(); return nil }
-
 func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
 	var stats relay.Stats
+
 	query := `
         SELECT 
-            COUNT(*) FILTER (WHERE status = 'PENDING' AND attempts = 0) as pending,
-            COUNT(*) FILTER (WHERE status = 'PENDING' AND attempts > 0) as retrying,
-            COUNT(*) FILTER (WHERE status = 'DELIVERING') as in_flight,
-            COUNT(*) FILTER (WHERE status = 'DEAD') as dead
-        FROM outbox_events`
+            COUNT(*),
+            COALESCE(EXTRACT(EPOCH FROM (NOW() - MIN(created_at)))::BIGINT, 0)
+        FROM outbox_events 
+        WHERE status = 'PENDING'`
 
-	// Note: You'll need to update your relay.Stats struct to include InFlight and Dead!
 	err := p.pool.QueryRow(ctx, query).Scan(
-		&stats.Pending,
-		&stats.Retrying,
-		&stats.InFlight,
-		&stats.Failed,
+		&stats.PendingCount,
+		&stats.OldestAgeSec,
 	)
+
 	return stats, err
 }
+
+func (p *Postgres) Close() error { p.pool.Close(); return nil }

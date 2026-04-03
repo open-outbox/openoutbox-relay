@@ -24,7 +24,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 			return rootCtx
 		},
 		config.Load,
-		relay.NewMetrics,
+		telemetry.NewMetrics,
 		telemetry.NewOTelProviders,
 		func(p *telemetry.OTelProviders) trace.TracerProvider { return p.TraceProvider },
 		func(p *telemetry.OTelProviders) metric.MeterProvider { return p.MeterProvider },
@@ -41,6 +41,19 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				return nil, err
 			}
 			return logger, nil
+		},
+		func(
+			logger *zap.Logger,
+			metrics *telemetry.Metrics,
+			tp trace.TracerProvider,
+			mp metric.MeterProvider,
+		) telemetry.Telemetry {
+			return telemetry.Telemetry{
+				Logger:         logger,
+				Metrics:        metrics,
+				TracerProvider: tp,
+				MeterProvider:  mp,
+			}
 		},
 		func(ctx context.Context, cfg *config.Config) (relay.Storage, error) {
 
@@ -81,25 +94,22 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				return nil, fmt.Errorf("unknown publisher type: %s", cfg.PublisherType)
 			}
 		},
-		func(s relay.Storage,
+		func(
+			s relay.Storage,
 			p relay.Publisher,
 			cfg *config.Config,
-			logger *zap.Logger,
-			metrics *relay.Metrics,
-			traceProvider trace.TracerProvider,
-			meterProvider metric.MeterProvider) *relay.Engine {
-			return relay.NewEngine(
-				s,
-				p,
-				cfg.PollInterval,
-				cfg.BatchSize,
-				cfg.LeaseTimeout,
-				cfg.ReapBatchSize,
-				logger,
-				metrics,
-				traceProvider,
-				meterProvider,
-			)
+			tel telemetry.Telemetry,
+		) *relay.Engine {
+
+			params := relay.EngineParams{
+				RelayID:       cfg.RELAY_ID,
+				Interval:      cfg.PollInterval,
+				BatchSize:     cfg.BatchSize,
+				LeaseTimeout:  cfg.LeaseTimeout,
+				ReapBatchSize: cfg.ReapBatchSize,
+			}
+
+			return relay.NewEngine(s, p, params, tel)
 		},
 		func(ctx context.Context, s relay.Storage, cfg *config.Config, logger *zap.Logger) *relay.Server {
 			return relay.NewServer(ctx, s, cfg.ServerPort, logger)

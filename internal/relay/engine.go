@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/open-outbox/relay/internal/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
@@ -31,37 +32,45 @@ type Engine struct {
 	batchSize     int
 	policy        RetryPolicy
 	logger        *zap.Logger
-	metrics       *Metrics
+	metrics       *telemetry.Metrics
 	tracer        trace.Tracer
 	meter         metric.Meter
+}
+
+// EngineParams handles the tuning and identity.
+type EngineParams struct {
+	RelayID       string
+	Interval      time.Duration
+	BatchSize     int
+	LeaseTimeout  time.Duration
+	ReapBatchSize int
 }
 
 // NewEngine creates a ready-to-run Relay Engine.
 func NewEngine(
 	storage Storage,
 	publisher Publisher,
-	interval time.Duration,
-	batchSize int,
-	leaseTimeout time.Duration,
-	reapBatchSize int,
-	logger *zap.Logger,
-	metrics *Metrics,
-	traceProvider trace.TracerProvider,
-	meterProvider metric.MeterProvider,
+	params EngineParams,
+	tel telemetry.Telemetry,
 ) *Engine {
+	// If RelayID is empty, generate one as a fallback
+	id := params.RelayID
+	if id == "" {
+		id = generateRelayID()
+	}
 
 	return &Engine{
-		relayId:       generateRelayID(),
+		relayId:       id,
 		storage:       storage,
 		publisher:     publisher,
-		interval:      interval,
-		leaseTimeout:  leaseTimeout,
-		reapBatchSize: reapBatchSize,
-		batchSize:     batchSize,
-		logger:        logger.With(zap.String("module", "engine")),
-		metrics:       metrics,
-		tracer:        traceProvider.Tracer(instrumentationName),
-		meter:         meterProvider.Meter(instrumentationName),
+		interval:      params.Interval,
+		batchSize:     params.BatchSize,
+		leaseTimeout:  params.LeaseTimeout,
+		reapBatchSize: params.ReapBatchSize,
+		logger:        tel.ScopedLogger("engine"),
+		metrics:       tel.Metrics,
+		tracer:        tel.Tracer(instrumentationName),
+		meter:         tel.Meter(instrumentationName),
 		policy: RetryPolicy{
 			MaxAttempts: 10,
 			BaseDelay:   1 * time.Second,
@@ -69,6 +78,8 @@ func NewEngine(
 		},
 	}
 }
+
+// NewEngine creates a ready-to-run Relay Engine.
 
 // Run starts the polling loop. It stops when the context is cancelled.
 func (e *Engine) Start(ctx context.Context) error {

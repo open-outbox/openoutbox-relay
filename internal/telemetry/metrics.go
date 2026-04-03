@@ -1,7 +1,11 @@
-package relay
+package telemetry
 
 import (
 	"go.opentelemetry.io/otel/metric"
+)
+
+const (
+	instrumentationName = "github.com/open-outbox/relay/engine"
 )
 
 type Metrics struct {

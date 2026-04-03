@@ -234,11 +234,11 @@ func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
 	var stats relay.Stats
 
 	query := `
-        SELECT 
-            COUNT(*),
-            COALESCE(EXTRACT(EPOCH FROM (NOW() - MIN(created_at)))::BIGINT, 0)
-        FROM outbox_events 
-        WHERE status = 'PENDING'`
+        SELECT
+            COALESCE((SELECT count(*) FROM outbox_events WHERE status='PENDING'), 0)::bigint,
+            COALESCE(EXTRACT(EPOCH FROM (now() - (SELECT min(created_at) 
+				FROM outbox_events WHERE status='PENDING'))), 0)::bigint
+	`
 
 	err := p.pool.QueryRow(ctx, query).Scan(
 		&stats.PendingCount,

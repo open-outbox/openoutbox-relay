@@ -31,6 +31,6 @@ type Storage interface {
 }
 
 type Stats struct {
-	PendingCount int64 `json:"pending"`
+	PendingCount int64 `json:"pending_count"`
 	OldestAgeSec int64 `json:"oldest_age_sec"`
 }

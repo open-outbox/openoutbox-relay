@@ -48,9 +48,10 @@ func (p *Postgres) ClaimBatch(
         WHERE e.event_id = t.event_id
         RETURNING 
             e.event_id, 
-            e.event_type, 
-            e.payload, 
-            e.partition_key,
+            e.event_type,
+			e.partition_key,
+            e.payload,
+			e.headers,
             e.attempts,
 			e.created_at;
     `
@@ -72,8 +73,9 @@ func (p *Postgres) ClaimBatch(
 		err := rows.Scan(
 			&e.ID,
 			&e.Type,
-			&e.Payload,
 			&e.PartitionKey,
+			&e.Payload,
+			&e.Headers,
 			&e.Attempts,
 			&e.CreatedAt,
 		)

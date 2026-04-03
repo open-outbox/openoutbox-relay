@@ -26,14 +26,11 @@ type Event struct {
 	Payload      []byte         `db:"payload"       json:"payload"`
 	Headers      map[string]any `db:"headers"       json:"headers"`
 
-	// State
-	Status    Status `db:"status"     json:"status"`
-	Attempts  int    `db:"attempts"   json:"attempts"`
-	LastError string `db:"last_error" json:"last_error"`
+	// Delivery status
+	Attempts int `db:"attempts"   json:"attempts"`
 
 	// Time fields
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }
 
 type FailedEvent struct {

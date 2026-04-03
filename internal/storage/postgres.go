@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,7 +26,6 @@ func (p *Postgres) ClaimBatch(
 	ctx context.Context,
 	relayID string,
 	batchSize int,
-	leaseMinutes int,
 ) ([]relay.Event, error) {
 	query := `
         WITH target_events AS (
@@ -198,6 +198,38 @@ func (p *Postgres) MarkFailedBatch(
 	return nil
 }
 
+func (p *Postgres) ReapExpiredLeases(ctx context.Context, leaseTimeout time.Duration, limit int) (int64, error) {
+	// We use a CTE (WITH block) to:
+	// 1. Find the oldest stuck leases (ORDER BY locked_at)
+	// 2. Limit the impact
+	// 3. Prevent multiple reapers from fighting (SKIP LOCKED)
+
+	query := `
+        WITH stuck_events AS (
+            SELECT event_id 
+            FROM openoutbox_events
+            WHERE status = 'DELIVERING'
+              AND locked_at < (now() - $1::interval)
+            ORDER BY locked_at ASC
+            LIMIT $2
+            FOR UPDATE SKIP LOCKED
+        )
+        UPDATE openoutbox_events
+        SET status = 'PENDING',
+            locked_by = NULL,
+            locked_at = NULL,
+        FROM stuck_events
+        WHERE openoutbox_events.event_id = stuck_events.event_id
+    `
+
+	result, err := p.pool.Exec(ctx, query, durationToInterval(leaseTimeout), limit)
+	if err != nil {
+		return 0, fmt.Errorf("failed to reap expired leases: %w", err)
+	}
+
+	return result.RowsAffected(), nil
+}
+
 func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
 	var stats relay.Stats
 
@@ -217,3 +249,15 @@ func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
 }
 
 func (p *Postgres) Close() error { p.pool.Close(); return nil }
+
+func durationToInterval(d time.Duration) string {
+	// simplest portable interval literal
+	// e.g. "1.5s" -> "1500 milliseconds"
+	ms := d.Milliseconds()
+	return fmtIntervalMillis(ms)
+}
+
+func fmtIntervalMillis(ms int64) string {
+	// Postgres interval accepts "123 milliseconds"
+	return strconv.FormatInt(ms, 10) + " milliseconds"
+}

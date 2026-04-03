@@ -21,17 +21,18 @@ const (
 
 // Engine coordinates the movement of events from Storage to Publisher.
 type Engine struct {
-	relayId      string
-	storage      Storage
-	publisher    Publisher
-	interval     time.Duration
-	leaseMinutes int
-	batchSize    int
-	policy       RetryPolicy
-	logger       *zap.Logger
-	metrics      *Metrics
-	tracer       trace.Tracer
-	meter        metric.Meter
+	relayId       string
+	storage       Storage
+	publisher     Publisher
+	interval      time.Duration
+	leaseTimeout  time.Duration
+	reapBatchSize int
+	batchSize     int
+	policy        RetryPolicy
+	logger        *zap.Logger
+	metrics       *Metrics
+	tracer        trace.Tracer
+	meter         metric.Meter
 }
 
 // NewEngine creates a ready-to-run Relay Engine.
@@ -40,7 +41,8 @@ func NewEngine(
 	publisher Publisher,
 	interval time.Duration,
 	batchSize int,
-	leaseMinutes int,
+	leaseTimeout time.Duration,
+	reapBatchSize int,
 	logger *zap.Logger,
 	metrics *Metrics,
 	traceProvider trace.TracerProvider,
@@ -48,16 +50,17 @@ func NewEngine(
 ) *Engine {
 
 	return &Engine{
-		relayId:      "change latter",
-		storage:      storage,
-		publisher:    publisher,
-		interval:     interval,
-		leaseMinutes: leaseMinutes,
-		batchSize:    batchSize,
-		logger:       logger.With(zap.String("module", "engine")),
-		metrics:      metrics,
-		tracer:       traceProvider.Tracer(instrumentationName),
-		meter:        meterProvider.Meter(instrumentationName),
+		relayId:       "change latter",
+		storage:       storage,
+		publisher:     publisher,
+		interval:      interval,
+		leaseTimeout:  leaseTimeout,
+		reapBatchSize: reapBatchSize,
+		batchSize:     batchSize,
+		logger:        logger.With(zap.String("module", "engine")),
+		metrics:       metrics,
+		tracer:        traceProvider.Tracer(instrumentationName),
+		meter:         meterProvider.Meter(instrumentationName),
 		policy: RetryPolicy{
 			MaxAttempts: 10,
 			BaseDelay:   1 * time.Second,
@@ -71,6 +74,7 @@ func (e *Engine) Start(ctx context.Context) error {
 	ticker := time.NewTicker(e.interval)
 
 	go e.watchBacklog(ctx)
+	go e.ReapExpiredLeases(ctx)
 
 	defer ticker.Stop()
 
@@ -86,16 +90,41 @@ func (e *Engine) Start(ctx context.Context) error {
 	}
 }
 
-func (e *Engine) watchBacklog(ctx context.Context) {
+func (e *Engine) watchBacklog(ctx context.Context) error {
 	ticker := time.NewTicker(defaultWatchInterval)
 	defer ticker.Stop()
+
+	e.updateBacklogMetrics(ctx)
 	for {
-		e.updateBacklogMetrics(ctx)
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case <-ticker.C:
 			e.updateBacklogMetrics(ctx)
+		}
+	}
+}
+
+func (e *Engine) ReapExpiredLeases(ctx context.Context) error {
+
+	ticker := time.NewTicker(e.leaseTimeout)
+	defer ticker.Stop()
+
+	_, err := e.storage.ReapExpiredLeases(ctx, e.leaseTimeout, e.reapBatchSize)
+
+	if err != nil && err != context.Canceled {
+		e.logger.Error("failed to fetch events.", zap.Error(err))
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			_, err := e.storage.ReapExpiredLeases(ctx, e.leaseTimeout, e.reapBatchSize)
+			if err != nil && err != context.Canceled {
+				e.logger.Error("failed to fetch events.", zap.Error(err))
+			}
 		}
 	}
 }
@@ -111,7 +140,7 @@ func (e *Engine) process(ctx context.Context) error {
 
 	claimStart := time.Now()
 	// Claim a batch of events
-	events, err := e.storage.ClaimBatch(ctx, e.relayId, e.batchSize, e.leaseMinutes)
+	events, err := e.storage.ClaimBatch(ctx, e.relayId, e.batchSize)
 	if err != nil && err != context.Canceled {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())

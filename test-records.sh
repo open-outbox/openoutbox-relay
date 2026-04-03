@@ -24,15 +24,15 @@ CREATE TABLE outbox_events (
     )
 );
 
-CREATE INDEX idx_outbox_processing_queue 
-ON outbox_events (available_at ASC, created_at ASC)
-WHERE status = 'PENDING';
+CREATE INDEX IF NOT EXISTS idx_outbox_processing_queue
+    ON public.outbox_events USING btree
+    (available_at ASC NULLS LAST, created_at ASC NULLS LAST)
+    TABLESPACE pg_default
+    WHERE status = 'PENDING'::text;
 
-CREATE INDEX idx_outbox_stuck_leases 
-ON outbox_events (locked_at) 
-WHERE status = 'DELIVERING';
-
-CREATE INDEX idx_outbox_archive_lookup 
-ON outbox_events (delivered_at) 
-WHERE status = 'DELIVERED';
+CREATE INDEX IF NOT EXISTS idx_outbox_stuck_leases
+    ON public.outbox_events USING btree
+    (locked_at ASC NULLS LAST)
+    TABLESPACE pg_default
+    WHERE status = 'DELIVERING'::text;
 "

@@ -33,18 +33,15 @@ func (p *Postgres) ClaimBatch(
             FROM outbox_events
             WHERE 
                 -- Standard pickup: status pending and available
-                (status = $1 AND available_at <= NOW())
-                OR 
-                -- Rescue stuck leases: leased but stuck
-                (status = $2 AND locked_at < NOW() - MAKE_INTERVAL(mins => $3))
-            ORDER BY created_at ASC
-            LIMIT $4
+                status = $1 AND available_at <= NOW()
+            ORDER BY available_at ASC, created_at ASC
+            LIMIT $2
             FOR UPDATE SKIP LOCKED
         ) 
         UPDATE outbox_events as e
         SET 
-            status = $2,
-            locked_by = $5,  
+            status = $3,
+            locked_by = $4,  
             locked_at = NOW(),
             updated_at = NOW()
         FROM target_events as t
@@ -60,9 +57,8 @@ func (p *Postgres) ClaimBatch(
 
 	rows, err := p.pool.Query(ctx, query,
 		relay.StatusPending,
-		relay.StatusDelivering,
-		leaseMinutes,
 		batchSize,
+		relay.StatusDelivering,
 		relayID,
 	)
 	if err != nil && err != context.Canceled {

@@ -321,7 +321,7 @@ func (e *Engine) assessFailure(event Event, publishError error) FailedEvent {
 	delay, policyAllowsRetry := e.policy.NextBackoff(nextAttempts)
 
 	isRetryable := true
-	var pErr PublishError
+	var pErr *PublishError
 	if errors.As(publishError, &pErr) {
 		isRetryable = pErr.IsRetryable
 	}

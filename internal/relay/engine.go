@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -79,53 +80,73 @@ func NewEngine(
 
 // Run starts the polling loop. It stops when the context is cancelled.
 func (e *Engine) Start(ctx context.Context) error {
-	ticker := time.NewTicker(e.interval)
+	// Create an errgroup derived from the parent context.
+	// If any goroutine returns an error, 'gCtx' is cancelled.
+	g, gCtx := errgroup.WithContext(ctx)
+	// 1. Background: Metrics Watcher
+	g.Go(func() error {
+		return e.watchBacklog(gCtx)
+	})
 
-	go e.watchBacklog(ctx)
-	go e.ReapExpiredLeases(ctx)
+	// 2. Background: Lease Reaper (Self-healing)
+	g.Go(func() error {
+		return e.reapExpiredLeases(gCtx)
+	})
 
-	defer ticker.Stop()
+	// 3. Main Loop: Event Processing
+	g.Go(func() error {
+		ticker := time.NewTicker(e.interval)
+		defer ticker.Stop()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			count, err := e.process(ctx)
-			if err != nil {
-				e.LogIfError(err, "Process error", zap.Error(err))
-				time.Sleep(e.interval)
-				continue
-			}
-			if count < e.batchSize {
-				time.Sleep(e.interval)
-				continue
+		for {
+			select {
+			case <-gCtx.Done():
+				return gCtx.Err()
+			case <-ticker.C:
+				count, err := e.process(gCtx)
+				if err != nil {
+					// We log and wait; the errgroup will catch critical errors if 'process' returns them.
+					e.LogIfError(err, "Batch processing failed")
+					time.Sleep(e.interval)
+					continue
+				}
+
+				// High-throughput optimization: if the batch was full, don't wait for the ticker.
+				if count >= e.batchSize {
+					continue
+				}
 			}
 		}
-	}
+	})
+
+	e.logger.Info("Engine started", zap.String("relay_id", e.relayId))
+
+	// Wait for all goroutines to finish or for the first one to fail.
+	return g.Wait()
+
 }
 
 // Stop handles the graceful cleanup of the Engine's dependencies.
 func (e *Engine) Stop() error {
-    e.logger.Info("Stopping engine: shutting down storage and publisher...")
-    
-    var errs []error
+	e.logger.Info("Stopping engine: shutting down storage and publisher...")
 
-    // We close storage first to stop picking up new work
-    if err := e.storage.Close(); err != nil {
-        errs = append(errs, fmt.Errorf("storage close: %w", err))
-    }
+	var errs []error
 
-    if err := e.publisher.Close(); err != nil {
-        errs = append(errs, fmt.Errorf("publisher close: %w", err))
-    }
+	// We close storage first to stop picking up new work
+	if err := e.storage.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("storage close: %w", err))
+	}
 
-    if len(errs) > 0 {
-        // join errors if using Go 1.20+
-        return errors.Join(errs...)
-    }
+	if err := e.publisher.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("publisher close: %w", err))
+	}
 
-    return nil
+	if len(errs) > 0 {
+		// join errors if using Go 1.20+
+		return errors.Join(errs...)
+	}
+
+	return nil
 }
 
 func (e *Engine) watchBacklog(ctx context.Context) error {
@@ -143,7 +164,7 @@ func (e *Engine) watchBacklog(ctx context.Context) error {
 	}
 }
 
-func (e *Engine) ReapExpiredLeases(ctx context.Context) error {
+func (e *Engine) reapExpiredLeases(ctx context.Context) error {
 
 	ticker := time.NewTicker(e.leaseTimeout)
 	defer ticker.Stop()
@@ -248,6 +269,7 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 			finalizeSpan.RecordError(err)
 			finalizeSpan.SetStatus(codes.Error, err.Error())
 			e.LogIfError(err, "failed to mark batch as delivered", zap.Error(err))
+			finalizeSpan.End()
 			return 0, err
 		}
 		finalizeSpan.End()

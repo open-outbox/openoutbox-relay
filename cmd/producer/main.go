@@ -34,7 +34,7 @@ func main() {
 		for i := 0; i < batchSize; i++ {
 			id := uuid.New()
 			userID := rand.Intn(10000)
-			eventType := "user.signup"
+			eventType := "event.user.signup"
 			payload := fmt.Sprintf(
 				`{"user_id": %d, "email": "user-%d@example.com"}`,
 				userID,

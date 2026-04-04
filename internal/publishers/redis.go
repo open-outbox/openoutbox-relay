@@ -41,7 +41,7 @@ func NewRedis(url string) (*Redis, error) {
 
 // Publish satisfies the relay.Publisher interface.
 // Publish appends the event to a Redis Stream using the event type as the Stream name.
-func (r *Redis) Publish(ctx context.Context, event relay.Event) (relay.PublishResult, error) {
+func (r *Redis) Publish(ctx context.Context, event relay.Event) error {
 
 	err := r.client.XAdd(ctx, &redis.XAddArgs{
 		Stream: event.Type,
@@ -52,20 +52,17 @@ func (r *Redis) Publish(ctx context.Context, event relay.Event) (relay.PublishRe
 	}).Err()
 
 	if err != nil {
-		return relay.PublishResult{}, &relay.PublishError{
+		return &relay.PublishError{
 			Err:         fmt.Errorf("failed to publish to redis stream: %w", err),
-			IsRetryable: r.isRetryable(err),
+			IsRetryable: r.isRedisErrorRetryable(err),
 			Code:        "REDIS_PUBLISH_ERROR",
 		}
 	}
 
-	return relay.PublishResult{
-		Status:     relay.StatusSuccess,
-		ProviderID: event.ID.String(),
-	}, nil
+	return nil
 }
 
-func (r *Redis) isRetryable(err error) bool {
+func (r *Redis) isRedisErrorRetryable(err error) bool {
 
 	if err == nil {
 		return false

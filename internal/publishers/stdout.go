@@ -20,7 +20,7 @@ func NewStdout() *Stdout {
 
 // Publish satisfies the relay.Publisher interface.
 // It formats the event as a string and writes it to standard output.
-func (s *Stdout) Publish(ctx context.Context, event relay.Event) (relay.PublishResult, error) {
+func (s *Stdout) Publish(ctx context.Context, event relay.Event) error {
 	_, err := fmt.Fprintf(os.Stdout, "ID: %s | TYPE: %s | PAYLOAD: %s\n",
 		event.ID,
 		event.Type,
@@ -28,17 +28,14 @@ func (s *Stdout) Publish(ctx context.Context, event relay.Event) (relay.PublishR
 	)
 
 	if err != nil {
-		return relay.PublishResult{}, &relay.PublishError{
+		return &relay.PublishError{
 			Err:         fmt.Errorf("failed to write to stdout: %w", err),
 			IsRetryable: false,
 			Code:        "STDOUT_WRITE_FAIL",
 		}
 	}
 
-	return relay.PublishResult{
-		Status:     relay.StatusSuccess,
-		ProviderID: event.ID.String(),
-	}, nil
+	return nil
 }
 
 func (s *Stdout) Close() error {

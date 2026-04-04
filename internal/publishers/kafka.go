@@ -32,7 +32,7 @@ func NewKafka(brokers string) *Kafka {
 
 // Publish satisfies the relay.Publisher interface.
 // It writes the event to Kafka and waits for a broker confirmation if configured.
-func (k *Kafka) Publish(ctx context.Context, event relay.Event) (relay.PublishResult, error) {
+func (k *Kafka) Publish(ctx context.Context, event relay.Event) error {
 	msg := kafka.Message{
 		Key:   []byte(event.ID.String()),
 		Topic: event.Type,
@@ -41,17 +41,14 @@ func (k *Kafka) Publish(ctx context.Context, event relay.Event) (relay.PublishRe
 
 	err := k.writer.WriteMessages(ctx, msg)
 	if err != nil {
-		return relay.PublishResult{}, &relay.PublishError{
+		return &relay.PublishError{
 			Err:         fmt.Errorf("kafka publish failed: %w", err),
 			IsRetryable: isKafkaErrorRetryable(err),
 			Code:        "KAFKA_WRITE_ERROR",
 		}
 	}
 
-	return relay.PublishResult{
-		Status:     relay.StatusSuccess,
-		ProviderID: event.ID.String(),
-	}, nil
+	return nil
 }
 
 // Close gracefully shuts down the Kafka writer.

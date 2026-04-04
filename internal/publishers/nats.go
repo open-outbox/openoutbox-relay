@@ -18,7 +18,6 @@ type Nats struct {
 
 // NewNats establishes a connection to a NATS server.
 func NewNats(url string) (*Nats, error) {
-	//TODO: Use options for name/reconnect logic to make it production-ready.
 	nc, err := nats.Connect(url, nats.Name("OpenOutbox-Relay"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
@@ -27,12 +26,12 @@ func NewNats(url string) (*Nats, error) {
 }
 
 // Publish sends the event payload to a NATS subject.
-func (n *Nats) Publish(ctx context.Context, event relay.Event) (relay.PublishResult, error) {
+func (n *Nats) Publish(ctx context.Context, event relay.Event) error {
 
 	if n.conn.IsClosed() {
-		return relay.PublishResult{}, &relay.PublishError{
+		return &relay.PublishError{
 			Err:         errors.New("nats: connection closed permanently"),
-			IsRetryable: false, // Requires manual pod restart or NewNats call
+			IsRetryable: true,
 			Code:        "NATS_FATAL_CLOSED",
 		}
 	}
@@ -40,7 +39,7 @@ func (n *Nats) Publish(ctx context.Context, event relay.Event) (relay.PublishRes
 	err := n.conn.Publish(event.Type, event.Payload)
 
 	if err != nil {
-		return relay.PublishResult{}, &relay.PublishError{
+		return &relay.PublishError{
 			Err:         fmt.Errorf("nats flush failed: %w", err),
 			IsRetryable: isNatsErrorRetryable(err),
 			Code:        "NATS_FLUSH_ERROR",
@@ -56,16 +55,13 @@ func (n *Nats) Publish(ctx context.Context, event relay.Event) (relay.PublishRes
 	}
 
 	if err := n.conn.FlushWithContext(flushCtx); err != nil {
-		return relay.PublishResult{}, &relay.PublishError{
+		return &relay.PublishError{
 			Err:         fmt.Errorf("nats flush failed: %w", err),
 			IsRetryable: isNatsErrorRetryable(err),
 			Code:        "NATS_FLUSH_ERROR",
 		}
 	}
-	return relay.PublishResult{
-		Status:     relay.StatusSuccess,
-		ProviderID: event.ID.String(),
-	}, nil
+	return nil
 }
 
 // Close gracefully shuts down the NATS connection.

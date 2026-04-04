@@ -16,6 +16,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const instrumentationName = "github.com/open-outbox/relay"
+
 func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 	c := dig.New()
 
@@ -49,10 +51,10 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 			mp metric.MeterProvider,
 		) telemetry.Telemetry {
 			return telemetry.Telemetry{
-				Logger:         logger,
-				Metrics:        metrics,
-				TracerProvider: tp,
-				MeterProvider:  mp,
+				Logger:  logger,
+				Metrics: metrics,
+				Tracer:  tp.Tracer(instrumentationName),
+				Meter:   mp.Meter(instrumentationName),
 			}
 		},
 		func(ctx context.Context, cfg *config.Config) (relay.Storage, error) {
@@ -117,7 +119,9 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				RetryPolicy:   retruPolicy,
 			}
 
-			return relay.NewEngine(s, p, params, tel)
+			instrumentedPublisher := publishers.NewInstrumentedPublisher(p, tel)
+
+			return relay.NewEngine(s, instrumentedPublisher, params, tel)
 		},
 		func(ctx context.Context, s relay.Storage, cfg *config.Config, logger *zap.Logger) *relay.Server {
 			return relay.NewServer(ctx, s, cfg.ServerPort, logger)

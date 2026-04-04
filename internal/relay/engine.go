@@ -2,6 +2,7 @@ package relay
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -16,7 +17,6 @@ import (
 )
 
 const (
-	instrumentationName  = "github.com/open-outbox/relay/engine"
 	defaultWatchInterval = 30 * time.Second
 )
 
@@ -70,8 +70,8 @@ func NewEngine(
 		policy:        params.RetryPolicy,
 		logger:        tel.ScopedLogger("engine"),
 		metrics:       tel.Metrics,
-		tracer:        tel.Tracer(instrumentationName),
-		meter:         tel.Meter(instrumentationName),
+		tracer:        tel.Tracer,
+		meter:         tel.Meter,
 	}
 }
 
@@ -92,14 +92,11 @@ func (e *Engine) Start(ctx context.Context) error {
 			return ctx.Err()
 		case <-ticker.C:
 			count, err := e.process(ctx)
-			if !telemetry.IsSilent(err) {
-				// On error, wait a bit so we don't spam a failing DB/Broker
-				e.logger.Error("Process error", zap.Error(err))
+			if err != nil {
+				e.LogIfError(err, "Process error", zap.Error(err))
 				time.Sleep(e.interval)
 				continue
 			}
-
-			// GUARD: If the pond isn't full, take a break.
 			if count < e.batchSize {
 				time.Sleep(e.interval)
 				continue
@@ -145,7 +142,7 @@ func (e *Engine) ReapExpiredLeases(ctx context.Context) error {
 
 func (e *Engine) process(ctx context.Context) (int, error) {
 
-	e.logger.Debug("Engine processing...")
+	e.logger.Info("Engine processing...")
 
 	// Start the Parent Span for the entire batch
 	ctx, span := e.tracer.Start(ctx, "Engine.Process",
@@ -155,12 +152,13 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 	claimStart := time.Now()
 	// Claim a batch of events
 	events, err := e.storage.ClaimBatch(ctx, e.relayId, e.batchSize)
-	if !telemetry.IsSilent(err) {
+	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		e.logger.Error("failed to fetch events.", zap.Error(err))
+		e.LogIfError(err, "failed to fetch events.", zap.Error(err))
 		return 0, err
 	}
+
 	e.metrics.StorageLatency.Record(ctx, time.Since(claimStart).Seconds(),
 		metric.WithAttributes(attribute.String("op", "claim")))
 	e.metrics.BatchSize.Record(ctx, int64(len(events)))
@@ -178,38 +176,18 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 		default:
 		}
 
-		// Create a new Context from the child span
-		// This allows the Publisher (Kafka/NATS) to attach its own spans to this one.
-		publishCtx, childSpan := e.tracer.Start(ctx, "Publisher.Publish",
-			trace.WithAttributes(
-				attribute.String("event.id", event.ID.String()),
-				attribute.String("event.type", event.Type),
-				attribute.Int("event.attempt", event.Attempts),
-			))
+		//Publish the event
+		err := e.publisher.Publish(ctx, event)
 
-		// Publish the event
-		publishStart := time.Now()
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return 0, err
+			}
 
-		res, err := e.publisher.Publish(publishCtx, event)
-
-		e.metrics.PublisherLatency.Record(ctx, time.Since(publishStart).Seconds(),
-			metric.WithAttributes(attribute.String("type", event.Type)))
-
-		if !telemetry.IsSilent(err) {
-			// Add event to failed events
 			failedEvents = append(failedEvents, e.assessFailure(event, err))
-
 			e.metrics.EventsTotal.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "failed")))
 
-			childSpan.RecordError(err)
-			childSpan.SetStatus(codes.Error, err.Error())
-			childSpan.End()
-			e.logger.Warn("publish failed",
-				zap.String("event_id", event.ID.String()),
-				zap.String("type", event.Type),
-				zap.Error(err),
-			)
-
+			// We return the error or continue the loop based on your retry logic
 			continue
 		}
 
@@ -219,15 +197,9 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 			metric.WithAttributes(attribute.String("type", event.Type)))
 		e.metrics.EventsTotal.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "success")))
 
-		// Success Telemetry
-		childSpan.SetStatus(codes.Ok, "success")
-		childSpan.SetAttributes(attribute.String("provider.id", res.ProviderID))
-		childSpan.SetAttributes(attribute.String("publish.duration", time.Since(publishStart).String()))
-		childSpan.End()
-
-		e.logger.Info("event published",
+		e.logger.Debug("event published",
 			zap.String("event_id", event.ID.String()),
-			zap.Duration("publish_duration", time.Since(publishStart)),
+			zap.String("type", event.Type),
 		)
 	}
 
@@ -249,11 +221,10 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 			),
 		)
 
-		if !telemetry.IsSilent(err) {
+		if err != nil {
 			finalizeSpan.RecordError(err)
 			finalizeSpan.SetStatus(codes.Error, err.Error())
-			finalizeSpan.End()
-			e.logger.Error("failed to mark batch as delivered", zap.Error(err))
+			e.LogIfError(err, "failed to mark batch as delivered", zap.Error(err))
 			return 0, err
 		}
 		finalizeSpan.End()
@@ -279,15 +250,17 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 			),
 		)
 
-		if !telemetry.IsSilent(err) {
+		if err != nil {
 			failSpan.RecordError(err)
 			failSpan.SetStatus(codes.Error, err.Error())
 			failSpan.End()
-			e.logger.Error("failed to mark failure batch", zap.Error(err))
+			e.LogIfError(err, "failed to mark failure batch", zap.Error(err))
 			return 0, err
 		}
 		failSpan.End()
 	}
+
+	e.logger.Info("Engine process batch", zap.Int("batch_size", len(events)))
 
 	return len(events), nil
 }
@@ -315,12 +288,13 @@ func (e *Engine) assessFailure(event Event, publishError error) FailedEvent {
 func (e *Engine) updateBacklogMetrics(ctx context.Context) {
 
 	stats, err := e.storage.GetStats(ctx)
-	if !telemetry.IsSilent(err) {
-
-		e.logger.Warn("telemetry: failed to retrieve backlog stats",
-			zap.Error(err),
-			zap.String("relay_id", e.relayId),
-		)
+	if err != nil {
+		if !errors.Is(err, context.Canceled) {
+			e.logger.Warn("telemetry: failed to retrieve backlog stats",
+				zap.Error(err),
+				zap.String("relay_id", e.relayId),
+			)
+		}
 		return
 	}
 
@@ -343,8 +317,8 @@ func generateRelayID() string {
 }
 
 func (e *Engine) LogIfError(err error, msg string, fields ...zap.Field) {
-	if telemetry.IsSilent(err) {
+	if err == nil || errors.Is(err, context.Canceled) {
 		return
 	}
-	e.logger.Error(msg, append(fields, zap.Error(err))...)
+	e.logger.Error(msg, fields...)
 }

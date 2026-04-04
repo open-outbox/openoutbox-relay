@@ -78,7 +78,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 		func(cfg *config.Config) (relay.Publisher, error) {
 			switch cfg.PublisherType {
 			case "nats":
-				return publishers.NewNats(cfg.PublisherURL)
+				return publishers.NewNats(cfg.PublisherURL, cfg.NatsFlushTimeout)
 
 			case "kafka":
 				return publishers.NewKafka(cfg.PublisherURL), nil

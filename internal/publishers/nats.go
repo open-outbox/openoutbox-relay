@@ -13,16 +13,17 @@ import (
 
 // Nats is a publisher implementation that sends events to a NATS server.
 type Nats struct {
-	conn *nats.Conn
+	conn         *nats.Conn
+	flushTimeout time.Duration
 }
 
 // NewNats establishes a connection to a NATS server.
-func NewNats(url string) (*Nats, error) {
+func NewNats(url string, flushTimeout time.Duration) (*Nats, error) {
 	nc, err := nats.Connect(url, nats.Name("OpenOutbox-Relay"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
 	}
-	return &Nats{conn: nc}, nil
+	return &Nats{conn: nc, flushTimeout: flushTimeout}, nil
 }
 
 // Publish sends the event payload to a NATS subject.
@@ -50,7 +51,7 @@ func (n *Nats) Publish(ctx context.Context, event relay.Event) error {
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		// If not, we MUST create one, otherwise NATS returns the error you're seeing.
 		var cancel context.CancelFunc
-		flushCtx, cancel = context.WithTimeout(ctx, 5*time.Second)
+		flushCtx, cancel = context.WithTimeout(ctx, n.flushTimeout)
 		defer cancel()
 	}
 

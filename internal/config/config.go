@@ -37,6 +37,9 @@ type Config struct {
 	RetryBaseDelay   time.Duration `mapstructure:"RETRY_BASE_DELAY"`
 	RetryMaxDelay    time.Duration `mapstructure:"RETRY_MAX_DELAY"`
 	RetryJitter      float64       `mapstructure:"RETRY_JITTER"`
+
+	//NATS configs
+	NatsFlushTimeout time.Duration `mapstructure:"NATS_FLUSH_TIMEOUT"`
 }
 
 func Load() (*Config, error) {
@@ -57,6 +60,9 @@ func Load() (*Config, error) {
 	v.SetDefault("RETRY_BASE_DELAY", "1s")
 	v.SetDefault("RETRY_MAX_DELAY", "24h")
 	v.SetDefault("RETRY_JITTER", 0.15)
+
+	// NATS Defaults
+	v.SetDefault("NATS_FLUSH_TIMEOUT", "5s")
 
 	// Read from .env or config.yaml (Optional)
 	v.SetConfigName("config")

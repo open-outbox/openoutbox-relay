@@ -92,7 +92,7 @@ func (e *Engine) Start(ctx context.Context) error {
 			return ctx.Err()
 		case <-ticker.C:
 			count, err := e.process(ctx)
-			if err != nil {
+			if err != nil && err != context.Canceled{
 				// On error, wait a bit so we don't spam a failing DB/Broker
 				e.logger.Error("Process error", zap.Error(err))
 				time.Sleep(e.interval)

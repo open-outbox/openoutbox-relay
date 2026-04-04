@@ -186,7 +186,7 @@ func (e *Engine) reapExpiredLeases(ctx context.Context) error {
 
 func (e *Engine) process(ctx context.Context) (int, error) {
 
-	e.logger.Info("Engine processing...")
+	e.logger.Debug("Engine processing...")
 
 	// Start the Parent Span for the entire batch
 	ctx, span := e.tracer.Start(ctx, "Engine.Process",
@@ -305,7 +305,13 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 		failSpan.End()
 	}
 
-	e.logger.Info("Engine process batch", zap.Int("batch_size", len(events)))
+	if len(events) > 0 {
+		e.logger.Info("batch completed",
+			zap.Int("count", len(events)),
+			zap.Int("successful", len(successEvents)),
+			zap.Int("failed", len(failedEvents)),
+		)
+	}
 
 	return len(events), nil
 }

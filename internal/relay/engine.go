@@ -267,7 +267,16 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 
 func (e *Engine) assessFailure(event Event, publishError error) FailedEvent {
 	nextAttempts := event.Attempts + 1
-	delay, shouldRetry := e.policy.NextBackoff(nextAttempts)
+	delay, policyAllowsRetry := e.policy.NextBackoff(nextAttempts)
+
+	isRetryable := true
+	var pErr PublishError
+	if errors.As(publishError, &pErr) {
+		isRetryable = pErr.IsRetryable
+	}
+
+	// Final decision: Policy must allow it AND Error must be retryable
+	shouldRetry := policyAllowsRetry && isRetryable
 
 	result := FailedEvent{
 		ID:        event.ID,
@@ -280,6 +289,16 @@ func (e *Engine) assessFailure(event Event, publishError error) FailedEvent {
 		result.AvailableAt = time.Now().Add(delay)
 	} else {
 		result.NewStatus = StatusDead
+		result.AvailableAt = time.Now()
+
+		// Event is not processable by the publisher
+		if !isRetryable {
+			e.logger.Warn("event killed: non-retryable error",
+				zap.String("event_id", event.ID.String()),
+				zap.String("type", event.Type),
+				zap.Error(publishError),
+			)
+		}
 	}
 
 	return result

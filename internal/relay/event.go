@@ -13,11 +13,13 @@ type Status string
 const (
 	// StatusPending indicates the event is ready to be picked up by a relay instance.
 	StatusPending Status = "PENDING"
-	// StatusDelivering indicates the event is currently locked and being processed by a relay instance.
+	// StatusDelivering indicates the event is currently locked and being
+	// processed by a relay instance.
 	StatusDelivering Status = "DELIVERING"
 	// StatusDelivered indicates the event was successfully published to the message broker.
 	StatusDelivered Status = "DELIVERED"
-	// StatusDead indicates the event failed delivery attempts beyond the retry limit and is quarantined.
+	// StatusDead indicates the event failed delivery attempts beyond the
+	// retry limit and is quarantined.
 	StatusDead Status = "DEAD"
 )
 

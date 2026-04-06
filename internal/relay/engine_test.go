@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/open-outbox/relay/internal/telemetry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
@@ -19,38 +20,43 @@ type MockStorage struct {
 	mock.Mock
 }
 
-func (m *MockStorage) ClaimBatch(ctx context.Context, relayId string, size int) ([]Event, error) {
-	args := m.Called(ctx, relayId, size)
+func (m *MockStorage) ClaimBatch(
+	ctx context.Context,
+	relayID string,
+	size int,
+	buffer []Event,
+) ([]Event, error) {
+	args := m.Called(ctx, relayID, size, buffer)
 	return args.Get(0).([]Event), args.Error(1)
 }
 
 func (m *MockStorage) MarkDeliveredBatch(
 	ctx context.Context,
 	ids []uuid.UUID,
-	relayId string,
+	relayID string,
 ) error {
-	args := m.Called(ctx, ids, relayId)
+	args := m.Called(ctx, ids, relayID)
 	return args.Error(0)
 }
 
 func (m *MockStorage) MarkFailedBatch(
 	ctx context.Context,
 	failed []FailedEvent,
-	relayId string,
+	relayID string,
 ) error {
-	args := m.Called(ctx, failed, relayId)
+	args := m.Called(ctx, failed, relayID)
 	return args.Error(0)
 }
 
-func (m *MockStorage) GetStats(ctx context.Context) (Stats, error) {
+func (m *MockStorage) GetStats(_ context.Context) (Stats, error) {
 	args := m.Called()
 	return args.Get(0).(Stats), args.Error(1)
 }
 
 func (m *MockStorage) ReapExpiredLeases(
-	ctx context.Context,
-	leaseTimeout time.Duration,
-	limit int,
+	_ context.Context,
+	_ time.Duration,
+	_ int,
 ) (int64, error) {
 	args := m.Called()
 	return args.Get(0).(int64), args.Error(1)
@@ -65,9 +71,9 @@ type MockPublisher struct {
 	mock.Mock
 }
 
-func (m *MockPublisher) Publish(ctx context.Context, event Event) (PublishResult, error) {
+func (m *MockPublisher) Publish(ctx context.Context, event Event) error {
 	args := m.Called(ctx, event)
-	return args.Get(0).(PublishResult), args.Error(1)
+	return args.Error(1)
 }
 
 func (m *MockPublisher) Close() error {
@@ -76,10 +82,11 @@ func (m *MockPublisher) Close() error {
 }
 
 func TestRetryPolicy_NextBackoff(t *testing.T) {
-	policy := RetryPolicy{
+	policy := ExponentialBackoff{
 		MaxAttempts: 10,
 		BaseDelay:   1 * time.Second,
 		MaxDelay:    10 * time.Second,
+		Jitter:      0.15,
 	}
 
 	t.Run("Exponential Growth", func(t *testing.T) {
@@ -150,7 +157,7 @@ func TestEngine_Process_HappyPath(t *testing.T) {
 
 	// Expect: Publish that 1 event
 	mockPublisher.On("Publish", ctx, fakeEvent).
-		Return(PublishResult{Status: 200}, nil)
+		Return(nil)
 
 	// Expect: Mark that 1 event as delivered
 	mockStorage.On("MarkDeliveredBatch", ctx, []uuid.UUID{eventID}, relayID).
@@ -158,20 +165,37 @@ func TestEngine_Process_HappyPath(t *testing.T) {
 
 	// 3. Initialize Engine
 	// (Using no-op providers for metrics/tracing to keep it simple)
-	metrics, err := NewMetrics(metricnoop.NewMeterProvider())
+	metrics, err := telemetry.NewMetrics(metricnoop.NewMeterProvider())
 	assert.NoError(t, err)
+
+	rp := ExponentialBackoff{
+		MaxAttempts: 10,
+		BaseDelay:   1 * time.Second,
+		MaxDelay:    10 * time.Second,
+		Jitter:      0.15,
+	}
+	params := EngineParams{
+		RelayID:            "dummy",
+		Interval:           1 * time.Second,
+		BatchSize:          10,
+		LeaseTimeout:       1 * time.Second,
+		ReapBatchSize:      5,
+		RetryPolicy:        rp,
+		EnableBatchPublish: false,
+	}
+
+	tm := telemetry.Telemetry{
+		Tracer:  tracenoop.NewTracerProvider().Tracer("TestTracer"),
+		Meter:   metricnoop.NewMeterProvider().Meter("TestMeter"),
+		Logger:  zap.NewNop(),
+		Metrics: metrics,
+	}
 
 	e := NewEngine(
 		mockStorage,
 		mockPublisher,
-		1*time.Second,
-		10,
-		1*time.Second,
-		10,
-		zap.NewNop(),
-		metrics, // Ensure your Metrics struct handles nil or use a mock
-		tracenoop.NewTracerProvider(),
-		metricnoop.NewMeterProvider(),
+		params,
+		tm,
 	)
 
 	// 4. Execution
@@ -197,11 +221,11 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 
 	// 2. Event 1: Publish Success
 	mockPublisher.On("Publish", mock.Anything, event1).
-		Return(PublishResult{Status: 200}, nil)
+		Return(nil)
 
 	// 3. Event 2: Publish Failure
 	mockPublisher.On("Publish", mock.Anything, event2).
-		Return(PublishResult{}, errors.New("network error"))
+		Return(errors.New("network error"))
 
 	// 4. Verify BOTH storage updates happen
 	// Success side:
@@ -217,22 +241,38 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 	// Initialize & Run
 	// 3. Initialize Engine
 	// (Using no-op providers for metrics/tracing to keep it simple)
-	metrics, err := NewMetrics(metricnoop.NewMeterProvider())
+	metrics, err := telemetry.NewMetrics(metricnoop.NewMeterProvider())
 	assert.NoError(t, err)
+	rp := ExponentialBackoff{
+		MaxAttempts: 10,
+		BaseDelay:   1 * time.Second,
+		MaxDelay:    10 * time.Second,
+		Jitter:      0.15,
+	}
+	params := EngineParams{
+		RelayID:            "dummy",
+		Interval:           1 * time.Second,
+		BatchSize:          10,
+		LeaseTimeout:       1 * time.Second,
+		ReapBatchSize:      5,
+		RetryPolicy:        rp,
+		EnableBatchPublish: false,
+	}
+
+	tm := telemetry.Telemetry{
+		Tracer:  tracenoop.NewTracerProvider().Tracer("TestTracer"),
+		Meter:   metricnoop.NewMeterProvider().Meter("TestMeter"),
+		Logger:  zap.NewNop(),
+		Metrics: metrics,
+	}
 
 	e := NewEngine(
 		mockStorage,
 		mockPublisher,
-		1*time.Second,
-		10,
-		1*time.Second,
-		5,
-		zap.NewNop(),
-		metrics, // Ensure your Metrics struct handles nil or use a mock
-		tracenoop.NewTracerProvider(),
-		metricnoop.NewMeterProvider(),
+		params,
+		tm,
 	)
-	e.relayId = "change latter"
+	e.relayID = "change latter"
 	_, err = e.process(context.Background())
 
 	assert.NoError(t, err)

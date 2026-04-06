@@ -22,7 +22,7 @@ import (
 
 // main initializes the application and starts the main execution loop.
 func main() {
-	godotenv.Load()
+	_ = godotenv.Load()
 	if err := run(); err != nil {
 		log.Fatalf("Relay terminated with error: %v", err)
 	}
@@ -36,7 +36,7 @@ func run() error {
 
 	c, err := container.BuildContainer(ctx)
 	if err != nil {
-		return fmt.Errorf("Failed to build container: %w", err)
+		return fmt.Errorf("failed to build container: %w", err)
 	}
 
 	return c.Invoke(

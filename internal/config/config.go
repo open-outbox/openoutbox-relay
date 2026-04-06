@@ -32,7 +32,8 @@ type Config struct {
 	//	Default: "postgres"
 	StorageType string `mapstructure:"STORAGE_TYPE"`
 
-	// PublisherType determines the message broker or output (e.g., "nats", "kafka", "redis", "stdout").
+	// PublisherType determines the message broker or output
+	// (e.g., "nats", "kafka", "redis", "stdout").
 	//	Default: "stdout"
 	PublisherType string `mapstructure:"PUBLISHER_TYPE"`
 
@@ -71,7 +72,7 @@ type Config struct {
 	// RELAY_ID is a unique identifier for this instance, used for
 	// locking events in the database to prevent collisions.
 	//	Default: os.Hostname()
-	RELAY_ID string `mapstructure:"RELAY_ID"`
+	RelayID string `mapstructure:"RELAY_ID"`
 
 	// RetryMaxAttempts is the maximum number of times an event will be
 	// retried before being marked as DEAD.
@@ -133,11 +134,14 @@ type Config struct {
 	// as the relay may mark events as delivered before the broker acknowledges them.
 	//
 	//	Default: false
+	//
 	//	Caution: Only enable if your system can tolerate potential message loss
 	//	in exchange for maximum publishing throughput.
 	KafkaAsync bool `mapstructure:"KAFKA_ASYNC"`
 
-	// KafkaCompression specifies the compression algorithm used for messages (none, gzip, snappy, lz4, zstd).
+	// KafkaCompression specifies the compression algorithm used for
+	// messages (none, gzip, snappy, lz4, zstd).
+	// 	Default: "snappy"
 	KafkaCompression string `mapstructure:"KAFKA_COMPRESSION"`
 
 	// KafkaRequiredAcks defines the number of brokers that must acknowledge a
@@ -149,6 +153,7 @@ type Config struct {
 	//   "none" - (Maximum Speed) Does not wait for any acknowledgment (risks data loss).
 	//
 	//	Default: "all"
+	//
 	//	Note: In an Outbox Relay, "all" is the recommended setting to maintain
 	//	strict "At-Least-Once" delivery guarantees.
 	KafkaRequiredAcks string `mapstructure:"KAFKA_REQUIRED_ACKS"`

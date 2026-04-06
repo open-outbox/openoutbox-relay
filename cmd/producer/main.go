@@ -1,3 +1,4 @@
+// Produces test events into the outbox table
 package main
 
 import (
@@ -67,7 +68,8 @@ func main() {
 		if err := results.Close(); err != nil {
 			log.Printf("Batch Insert failed: %v", err)
 		} else {
-			log.Printf("Successfully inserted a batch of %d events at %s", batchSize, time.Now().Format(time.Kitchen))
+			log.Printf("Successfully inserted a batch of %d events at %s",
+				batchSize, time.Now().Format(time.Kitchen))
 		}
 
 		// Wait 1 second before the next burst

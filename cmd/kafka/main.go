@@ -1,3 +1,4 @@
+// Simulates batch insertion to Kafka
 package main
 
 import (
@@ -35,7 +36,12 @@ func main() {
 		Compression:  kafka.Snappy,
 		BatchSize:    1, // Force immediate flush of our manual batch
 	}
-	defer writer.Close()
+	defer func() {
+		err := writer.Close()
+		if err != nil {
+			log.Fatal("failed to close writer:", err)
+		}
+	}()
 
 	// 1. Pre-generate "DB" data to simulate your Postgres rows
 	dbRows := make([]DBEvent, totalMessages)
@@ -87,10 +93,9 @@ func main() {
 		// Send the batch
 		err := writer.WriteMessages(context.Background(), kafkaBatch...)
 		if err != nil {
-			log.Fatalf("❌ Batch failed: %v", err)
-		} else {
-			fmt.Printf("\n--- Sent batch %d ---\n", i)
+			log.Fatalf("Batch failed: %v", err)
 		}
+		fmt.Printf("\n--- Sent batch %d ---\n", i)
 	}
 
 	duration := time.Since(start)

@@ -17,6 +17,6 @@
 // across the entire relay.
 package telemetry
 
-// instrumentationName is the unique identifier used for OpenTelemetry tracing and metrics
+// InstrumentationName is the unique identifier used for OpenTelemetry tracing and metrics
 // associated with the relay's internal operations.
 const InstrumentationName = "github.com/open-outbox/relay"

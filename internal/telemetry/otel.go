@@ -83,7 +83,7 @@ func newResource() (*resource.Resource, error) {
 		resource.Default(),
 		resource.NewWithAttributes(
 			"",
-			semconv.ServiceName("github.com/open-outbox/relay"),
+			semconv.ServiceName(serviceName),
 		))
 }
 

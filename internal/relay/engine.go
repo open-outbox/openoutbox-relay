@@ -26,7 +26,7 @@ const (
 // and ensures that events are processed according to the configured batching
 // and retry policies.
 type Engine struct {
-	relayId            string
+	relayID            string
 	storage            Storage
 	publisher          Publisher
 	interval           time.Duration
@@ -71,7 +71,7 @@ func NewEngine(
 	}
 
 	return &Engine{
-		relayId:            id,
+		relayID:            id,
 		storage:            storage,
 		publisher:          publisher,
 		interval:           params.Interval,
@@ -128,7 +128,7 @@ func (e *Engine) Start(ctx context.Context) error {
 		}
 	})
 
-	e.logger.Info("Engine started", zap.String("relay_id", e.relayId))
+	e.logger.Info("Engine started", zap.String("relay_id", e.relayID))
 
 	return g.Wait()
 
@@ -244,7 +244,7 @@ func (e *Engine) claimBatch(ctx context.Context) ([]Event, error) {
 
 	start := time.Now()
 
-	events, err := e.storage.ClaimBatch(ctx, e.relayId, e.batchSize, e.events)
+	events, err := e.storage.ClaimBatch(ctx, e.relayID, e.batchSize, e.events)
 
 	e.metrics.StorageLatency.Record(ctx, time.Since(start).Seconds(),
 		metric.WithAttributes(attribute.String("op", "claim")))
@@ -268,7 +268,7 @@ func (e *Engine) markDelivered(ctx context.Context, ids []uuid.UUID) error {
 	defer span.End()
 
 	start := time.Now()
-	err := e.storage.MarkDeliveredBatch(ctx, ids, e.relayId)
+	err := e.storage.MarkDeliveredBatch(ctx, ids, e.relayID)
 
 	status := "success"
 	if err != nil {
@@ -294,7 +294,7 @@ func (e *Engine) markFailed(ctx context.Context, failures []FailedEvent) error {
 	defer span.End()
 
 	start := time.Now()
-	err := e.storage.MarkFailedBatch(ctx, failures, e.relayId)
+	err := e.storage.MarkFailedBatch(ctx, failures, e.relayID)
 
 	status := "success"
 	if err != nil {
@@ -371,7 +371,7 @@ func (e *Engine) publishBatch(
 ) ([]uuid.UUID, []FailedEvent, error) {
 
 	// err := e.publisher.PublishBatch(ctx, events)
-	err := fmt.Errorf("Batch publishing is not enabled yet")
+	err := fmt.Errorf("batch publishing is not enabled yet")
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, nil, err
@@ -445,7 +445,7 @@ func (e *Engine) updateBacklogMetrics(ctx context.Context) {
 		if !errors.Is(err, context.Canceled) {
 			e.logger.Warn("telemetry: failed to retrieve backlog stats",
 				zap.Error(err),
-				zap.String("relay_id", e.relayId),
+				zap.String("relay_id", e.relayID),
 			)
 		}
 		return

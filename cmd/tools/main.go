@@ -1,3 +1,4 @@
+// Creates the required NATs stream
 package main
 
 import (

@@ -32,7 +32,7 @@ func NewServer(ctx context.Context, s Storage, addr string, logger *zap.Logger) 
 
 	mux := http.NewServeMux()
 	handler := otelhttp.NewHandler(mux, "server-request",
-		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
 			return fmt.Sprintf("%s %s", r.Method, r.URL.Path)
 		}),
 	)

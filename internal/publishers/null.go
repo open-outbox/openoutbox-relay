@@ -18,11 +18,11 @@ func NewNull() *Null {
 
 // Publish satisfies the relay.Publisher interface.
 // It effectively "black holes" the event and immediately reports success.
-func (s *Null) Publish(ctx context.Context, event relay.Event) error {
+func (s *Null) Publish(_ context.Context, _ relay.Event) error {
 	return nil
 }
 
-// Does nothing
+// Close does nothing
 func (s *Null) Close() error {
 	return nil
 }

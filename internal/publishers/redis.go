@@ -116,11 +116,7 @@ func (r *Redis) isRedisErrorRetryable(err error) bool {
 
 	// 6. Generic Network fallback
 	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return true
-	}
-
-	return false
+	return errors.As(err, &netErr)
 }
 
 // Close gracefully shuts down the Redis client and its underlying connection pool.

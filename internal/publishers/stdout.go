@@ -20,7 +20,7 @@ func NewStdout() *Stdout {
 
 // Publish satisfies the relay.Publisher interface.
 // It formats the event as a string and writes it to standard output.
-func (s *Stdout) Publish(ctx context.Context, event relay.Event) error {
+func (s *Stdout) Publish(_ context.Context, event relay.Event) error {
 	headersStr := "{}"
 	if len(event.Headers) > 0 {
 		headersStr = string(event.Headers)
@@ -43,6 +43,7 @@ func (s *Stdout) Publish(ctx context.Context, event relay.Event) error {
 	return nil
 }
 
+// Close does nothing
 func (s *Stdout) Close() error {
 	return nil
 }

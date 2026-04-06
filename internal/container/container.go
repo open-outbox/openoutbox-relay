@@ -122,7 +122,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 			}
 
 			params := relay.EngineParams{
-				RelayID:       cfg.RELAY_ID,
+				RelayID:       cfg.RelayID,
 				Interval:      cfg.PollInterval,
 				BatchSize:     cfg.BatchSize,
 				LeaseTimeout:  cfg.LeaseTimeout,

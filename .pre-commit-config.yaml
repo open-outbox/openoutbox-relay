@@ -1,10 +1,27 @@
 repos:
-  - repo: https://github.com/dnephin/pre-commit-golang
-    rev: v0.5.1
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0  # Use the latest version found by autoupdate
     hooks:
-      - id: go-imports
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        stages: [pre-commit] # Modern stage naming
 
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v2.5.0
+  - repo: local
     hooks:
-      - id: golangci-lint-full
+      - id: go-fmt
+        name: Enforce Formatting
+        entry: make fmt
+        language: system
+        files: '\.go$'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: go-lint
+        name: Enforce Linting
+        entry: make lint
+        language: system
+        files: '\.go$'
+        pass_filenames: false
+        stages: [pre-commit]

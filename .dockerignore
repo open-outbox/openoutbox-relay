@@ -1,0 +1,42 @@
+# --- Development & OS Junk ---
+.git
+.gitignore
+.idea
+.vscode
+*.swp
+*.DS_Store
+
+# --- Build Artifacts ---
+# Ignore any local binaries you've built
+bin/
+*.exe
+*.test
+*.out
+openoutbox-relay
+
+# --- Documentation & Configs ---
+# These aren't needed inside the Go binary container
+docs/
+configs/
+README.md
+LICENSE
+.github/
+
+# --- Infrastructure & Deployments ---
+# The container doesn't need its own definition or setup scripts
+deployments/
+scripts/
+docker-compose.yaml
+Makefile
+
+# --- Local Environment ---
+# IMPORTANT: Do not bake secrets into the image!
+.env
+.env.*
+! .env.example
+
+# --- Go Specific ---
+# Ignore vendor if you aren't using it (standard modules use cache)
+vendor/
+# Ignore test cache
+.cache/

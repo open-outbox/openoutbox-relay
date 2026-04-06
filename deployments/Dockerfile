@@ -15,7 +15,7 @@ RUN go mod download
 COPY . .
 
 # 3. Build the binary
-# We still use CGO_ENABLED=0 for maximum portability, 
+# We still use CGO_ENABLED=0 for maximum portability,
 # but it will link perfectly against Debian's libraries if needed.
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o openoutbox-relay ./cmd/relay/main.go
 
@@ -41,4 +41,4 @@ EXPOSE 8080
 RUN useradd -ms /bin/bash openoutbox
 USER openoutbox
 
-CMD ["./relay-app"]
+CMD ["./openoutbox-relay"]

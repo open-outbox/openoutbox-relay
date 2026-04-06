@@ -18,7 +18,7 @@ CREATE TABLE outbox_events (
     delivered_at  TIMESTAMPTZ,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    
+
     CONSTRAINT check_valid_status CHECK (
         status IN ('PENDING', 'DELIVERING', 'DELIVERED', 'DEAD')
     )

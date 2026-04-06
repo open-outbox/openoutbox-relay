@@ -9,9 +9,9 @@ processors:
   batch/fast:
     timeout: 1s
     send_batch_size: 50
-    
+
 exporters:
-  
+
   debug:
     verbosity: detailed
   otlp/jaeger:

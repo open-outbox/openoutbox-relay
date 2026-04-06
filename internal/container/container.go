@@ -1,3 +1,6 @@
+// Package container provides the Dependency Injection (DI) logic for the Outbox Relay.
+// It leverages uber-go/dig to assemble the application's components, including
+// configuration, telemetry, storage drivers, and message publishers into a unified graph.
 package container
 
 import (
@@ -19,12 +22,18 @@ import (
 	"go.uber.org/zap"
 )
 
+// instrumentationName is the unique identifier used for OpenTelemetry tracing and metrics
+// associated with the relay's internal operations.
 const instrumentationName = "github.com/open-outbox/relay"
 
+// BuildContainer initializes and returns a dig.Container with all application dependencies wired.
+// It handles the construction of the logger, telemetry providers, database storage,
+// and the message publisher based on the loaded configuration.
 func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 	c := dig.New()
 
 	dependencies := []interface{}{
+		// Provide the root context to the container.
 		func() context.Context {
 			return rootCtx
 		},
@@ -60,6 +69,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				Meter:   mp.Meter(instrumentationName),
 			}
 		},
+		// Storage provider: selects and initializes the DB driver based on configuration.
 		func(ctx context.Context, cfg *config.Config) (relay.Storage, error) {
 
 			switch cfg.StorageType {
@@ -78,6 +88,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				return nil, fmt.Errorf("unknown storage type: %s", cfg.StorageType)
 			}
 		},
+		// Publisher provider: selects and initializes the message broker driver based on configuration.
 		func(cfg *config.Config) (relay.Publisher, error) {
 			switch cfg.PublisherType {
 			case "nats":
@@ -99,6 +110,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				return nil, fmt.Errorf("unknown publisher type: %s", cfg.PublisherType)
 			}
 		},
+		// Relay Engine: wires the core processing logic with its required storage and publisher.
 		func(
 			s relay.Storage,
 			p relay.Publisher,
@@ -126,6 +138,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 
 			return relay.NewEngine(s, instrumentedPublisher, params, tel)
 		},
+		// Server provider: provides the HTTP server used for health checks and Prometheus metrics.
 		func(ctx context.Context, s relay.Storage, cfg *config.Config, logger *zap.Logger) *relay.Server {
 			return relay.NewServer(ctx, s, cfg.ServerPort, logger)
 		},
@@ -141,6 +154,9 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 
 }
 
+// buildKafkaPublisher is a specialized factory that maps generic application configuration
+// (strings) to Kafka-specific types like compression algorithms and required acknowledgment
+// levels. This separation keeps the main container logic clean.
 func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 	// Compression Mapping
 	compressionMap := map[string]kafka.Compression{
@@ -170,7 +186,7 @@ func buildKafkaPublisher(cfg config.Config) (relay.Publisher, error) {
 	acks, ok := acksMap[strings.ToLower(cfg.KafkaRequiredAcks)]
 
 	if !ok {
-		return nil, fmt.Errorf("unsupported Kafka RequiredAcks type: %s", cfg.KafkaCompression)
+		return nil, fmt.Errorf("unsupported Kafka RequiredAcks type: %s", cfg.KafkaRequiredAcks)
 	}
 
 	kCfg := publishers.KafkaConfig{

@@ -172,7 +172,7 @@ func Load() (*Config, error) {
 	v.SetDefault("POLL_INTERVAL", "500ms")
 	v.SetDefault("BATCH_SIZE", 100)
 	v.SetDefault("LEASE_TIMEOUT", "3m")
-	v.SetDefault("REAP_BATCH_SIZE", 500)
+	v.SetDefault("REAP_BATCH_SIZE", 100)
 	v.SetDefault("SERVER_PORT", ":8080")
 	v.SetDefault("ENVIRONMENT", Production)
 
@@ -189,15 +189,15 @@ func Load() (*Config, error) {
 	// We set KAFKA_BATCH_SIZE to 1. Since our Relay Engine already batches
 	// messages from the DB, setting this to 1 avoids the Kafka client adding
 	// an extra artificial delay waiting for its internal buffer to fill.
-	v.SetDefault("KAFKA_MAX_ATTEMPTS", 5)
-	v.SetDefault("KAFKA_WRITE_TIMEOUT", "10s")
-	v.SetDefault("KAFKA_READ_TIMEOUT", "10s")
 	v.SetDefault("KAFKA_BATCH_SIZE", 1)
 	v.SetDefault("KAFKA_BATCH_BYTES", 10485760) // 10MB default
 	v.SetDefault("KAFKA_BATCH_TIMEOUT", "10ms")
-	v.SetDefault("KAFKA_ASYNC", false)
-	v.SetDefault("KAFKA_COMPRESSION", "none")
+	v.SetDefault("KAFKA_MAX_ATTEMPTS", 5)
+	v.SetDefault("KAFKA_WRITE_TIMEOUT", "10s")
+	v.SetDefault("KAFKA_READ_TIMEOUT", "10s")
+	v.SetDefault("KAFKA_COMPRESSION", "snappy")
 	v.SetDefault("KAFKA_REQUIRED_ACKS", "all")
+	v.SetDefault("KAFKA_ASYNC", false)
 
 	// AutomaticEnv allows OS environment variables to override any file settings.
 	// This is the core of the Twelve-Factor App methodology.

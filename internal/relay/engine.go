@@ -22,6 +22,9 @@ const (
 )
 
 // Engine coordinates the movement of events from Storage to Publisher.
+// It manages the polling loop, background maintenance tasks like lease reaping,
+// and ensures that events are processed according to the configured batching
+// and retry policies.
 type Engine struct {
 	relayId            string
 	storage            Storage
@@ -40,6 +43,8 @@ type Engine struct {
 }
 
 // EngineParams handles the tuning and identity.
+// It encapsulates all the operational parameters required to initialize
+// and configure the relay engine's behavior.
 type EngineParams struct {
 	RelayID            string
 	Interval           time.Duration
@@ -50,14 +55,16 @@ type EngineParams struct {
 	EnableBatchPublish bool
 }
 
-// NewEngine creates a ready-to-run Relay Engine.
+// NewEngine initializes and returns a new Engine instance.
+// It sets up the internal state, pre-allocates memory buffers for batching,
+// and ensures that a unique RelayID is assigned if one is not provided in
+// the parameters.
 func NewEngine(
 	storage Storage,
 	publisher Publisher,
 	params EngineParams,
 	tel telemetry.Telemetry,
 ) *Engine {
-	// If RelayID is empty, generate one as a fallback
 	id := params.RelayID
 	if id == "" {
 		id = generateRelayID()
@@ -81,24 +88,22 @@ func NewEngine(
 	}
 }
 
-// NewEngine creates a ready-to-run Relay Engine.
-
-// Run starts the polling loop. It stops when the context is cancelled.
+// Start initiates the relay's operational loops in the background.
+// It launches three concurrent processes:
+// 1. A metrics watcher that periodically updates backlog statistics.
+// 2. A lease reaper that recovers "stuck" events from crashed instances.
+// 3. The main event processing loop that moves messages from storage to the publisher.
+// It blocks until the context is cancelled or a critical error occurs.
 func (e *Engine) Start(ctx context.Context) error {
-	// Create an errgroup derived from the parent context.
-	// If any goroutine returns an error, 'gCtx' is cancelled.
 	g, gCtx := errgroup.WithContext(ctx)
-	// 1. Background: Metrics Watcher
 	g.Go(func() error {
 		return e.watchBacklog(gCtx)
 	})
 
-	// 2. Background: Lease Reaper (Self-healing)
 	g.Go(func() error {
 		return e.reapExpiredLeases(gCtx)
 	})
 
-	// 3. Main Loop: Event Processing
 	g.Go(func() error {
 		ticker := time.NewTicker(e.interval)
 		defer ticker.Stop()
@@ -110,7 +115,6 @@ func (e *Engine) Start(ctx context.Context) error {
 			case <-ticker.C:
 				count, err := e.process(gCtx)
 				if err != nil {
-					// We log and wait; the errgroup will catch critical errors if 'process' returns them.
 					e.logIfError(err, "Batch processing failed")
 					time.Sleep(e.interval)
 					continue
@@ -126,18 +130,17 @@ func (e *Engine) Start(ctx context.Context) error {
 
 	e.logger.Info("Engine started", zap.String("relay_id", e.relayId))
 
-	// Wait for all goroutines to finish or for the first one to fail.
 	return g.Wait()
 
 }
 
-// Stop handles the graceful cleanup of the Engine's dependencies.
+// Stop performs a graceful shutdown of the Engine.
+// It closes the underlying storage and publisher connections to ensure no data loss.
 func (e *Engine) Stop() error {
 	e.logger.Info("Stopping engine: shutting down storage and publisher...")
 
 	var errs []error
 
-	// We close storage first to stop picking up new work
 	if err := e.storage.Close(); err != nil {
 		errs = append(errs, fmt.Errorf("storage close: %w", err))
 	}
@@ -147,7 +150,6 @@ func (e *Engine) Stop() error {
 	}
 
 	if len(errs) > 0 {
-		// join errors if using Go 1.20+
 		return errors.Join(errs...)
 	}
 
@@ -193,7 +195,6 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 
 	e.logger.Debug("Engine processing...")
 
-	// Start the Parent Span for the entire batch
 	ctx, span := e.tracer.Start(ctx, "Engine.Process",
 		trace.WithAttributes(attribute.Int("batch.size_requested", e.batchSize)))
 	defer span.End()
@@ -238,16 +239,13 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 }
 
 func (e *Engine) claimBatch(ctx context.Context) ([]Event, error) {
-	// Start a child span for the storage operation
 	ctx, span := e.tracer.Start(ctx, "Storage.ClaimBatch")
 	defer span.End()
 
 	start := time.Now()
 
-	// Perform the actual storage call using the pre-allocated buffer
 	events, err := e.storage.ClaimBatch(ctx, e.relayId, e.batchSize, e.events)
 
-	// Record metrics
 	e.metrics.StorageLatency.Record(ctx, time.Since(start).Seconds(),
 		metric.WithAttributes(attribute.String("op", "claim")))
 	e.metrics.BatchSize.Record(ctx, int64(len(events)))
@@ -259,7 +257,6 @@ func (e *Engine) claimBatch(ctx context.Context) ([]Event, error) {
 		return nil, err
 	}
 
-	// Set attributes for the actual number of events found
 	span.SetAttributes(attribute.Int("batch.size_actual", len(events)))
 
 	return events, nil
@@ -342,7 +339,6 @@ func (e *Engine) publishOnByOne(
 			failedEvents = append(failedEvents, e.assessFailure(event, err))
 			e.metrics.EventsTotal.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "failed")))
 
-			// We return the error or continue the loop based on your retry logic
 			continue
 		}
 
@@ -407,7 +403,6 @@ func (e *Engine) assessFailure(event Event, publishError error) FailedEvent {
 		isRetryable = pErr.IsRetryable
 	}
 
-	// Final decision: Policy must allow it AND Error must be retryable
 	shouldRetry := policyAllowsRetry && isRetryable
 
 	result := FailedEvent{
@@ -423,7 +418,6 @@ func (e *Engine) assessFailure(event Event, publishError error) FailedEvent {
 		result.NewStatus = StatusDead
 		result.AvailableAt = time.Now()
 
-		// Event is not processable by the publisher
 		if !isRetryable {
 			e.logger.Warn("event killed: non-retryable error",
 				zap.String("event_id", event.ID.String()),
@@ -459,9 +453,6 @@ func generateRelayID() string {
 		hostname = "unknown-relay"
 	}
 
-	// Add a short random suffix (e.g., relay-worker-6f2d)
-	// to prevent collisions if a Pod restarts quickly and the DB
-	// hasn't cleared the old "DELIVERING" rows yet.
 	suffix := uuid.New().String()[:4]
 
 	return fmt.Sprintf("%s-%s", hostname, suffix)

@@ -13,6 +13,9 @@ import (
 	"go.uber.org/zap"
 )
 
+// Server is an HTTP server that exposes administrative and observability endpoints.
+// It serves as a diagnostic window into the relay's operation, providing
+// metrics and health status.
 type Server struct {
 	storage Storage
 	server  *http.Server
@@ -20,17 +23,16 @@ type Server struct {
 }
 
 func registerHandlers(s *Server, mux *http.ServeMux) {
-
 	mux.HandleFunc("/stats", s.handleStats)
 }
 
+// NewServer creates an instrumented HTTP server. It uses otelhttp to
+// automatically generate trace spans for every incoming request.
 func NewServer(ctx context.Context, s Storage, addr string, logger *zap.Logger) *Server {
 
 	mux := http.NewServeMux()
 	handler := otelhttp.NewHandler(mux, "server-request",
 		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
-			// This is a bit of a hack for the default mux
-			// It uses the Method + Path as the span name
 			return fmt.Sprintf("%s %s", r.Method, r.URL.Path)
 		}),
 	)
@@ -51,21 +53,23 @@ func NewServer(ctx context.Context, s Storage, addr string, logger *zap.Logger) 
 	return srv
 }
 
+// handleStats returns a JSON snapshot of the outbox table metrics,
+// such as the number of pending events and the age of the oldest record.
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
-	// We use the request's context for the DB call
 	stats, err := s.storage.GetStats(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	// Replace the old line with this:
 	if err := json.NewEncoder(w).Encode(stats); err != nil {
 		s.logger.Error("failed to encode stats", zap.Error(err))
 	}
 }
 
-// Start starts the server. It does NOT block.
+// Start runs the HTTP server. It blocks until the provided context is canceled
+// or the underlying listener returns an error. When the context is canceled,
+// it performs a graceful shutdown with a 5-second timeout.
 func (s *Server) Start(ctx context.Context) (err error) {
 
 	srvErr := make(chan error, 1)
@@ -74,10 +78,8 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		srvErr <- s.server.ListenAndServe()
 	}()
 
-	// Wait for interruption.
 	select {
 	case err = <-srvErr:
-		// Error when starting HTTP server.
 		return err
 	case <-ctx.Done():
 		s.logger.Info("Shut down signal received, shudding down api server...")

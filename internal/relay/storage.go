@@ -8,30 +8,45 @@ import (
 )
 
 // Storage defines the contract for how the Relay reads and updates events.
+// Implementations are responsible for managing the persistence of outbox events
 type Storage interface {
-	// ClaimBatch captures a set of events and locks them to this relayID.
-	// Returns the events to be processed.
+	// ClaimBatch identifies and locks a set of pending events for a specific relay instance.
+	// It transitions events to the 'DELIVERING' status and associates them with the relayID.
+	// The 'buffer' parameter allows for reusing a slice to minimize allocations.
 	ClaimBatch(
 		ctx context.Context,
 		relayID string,
 		batchSize int,
-		buf []Event,
+		buffer []Event,
 	) ([]Event, error)
 
-	// MarkDeliveredBatch moves a set of IDs to the final 'DELIVERED' state.
+	// MarkDeliveredBatch moves events to the final 'DELIVERED' state.
+	// It must verify that the events are still locked by the provided relayID
+	// to prevent race conditions with the lease reaper.
 	MarkDeliveredBatch(ctx context.Context, ids []uuid.UUID, relayID string) error
 
-	// MarkFailedBatch handles both Retries (PENDING + Backoff) and Quarantine (DEAD).
+	// MarkFailedBatch handles events that encountered errors during publishing.
+	// It updates event metadata (attempts, last_error) and determines if the event
+	// should be retried (PENDING) or quarantined (DEAD).
 	MarkFailedBatch(ctx context.Context, failures []FailedEvent, relayID string) error
 
+	// ReapExpiredLeases identifies events stuck in the 'DELIVERING' state past their
+	// lease duration and resets them to 'PENDING', allowing other instances to pick them up.
 	ReapExpiredLeases(ctx context.Context, leaseTimeout time.Duration, limit int) (int64, error)
 
+	// GetStats retrieves high-level operational metrics about the outbox table,
+	// such as the current backlog size and the age of the oldest pending message.
 	GetStats(ctx context.Context) (Stats, error)
 
+	// Close releases any resources held by the storage implementation, such as
+	// database connection pools.
 	Close() error
 }
 
+// Stats represents a snapshot of the outbox table's current state.
 type Stats struct {
+	// PendingCount is the total number of events currently in 'PENDING' status.
 	PendingCount int64 `json:"pending_count"`
+	// OldestAgeSec is the age in seconds of the oldest event waiting to be processed.
 	OldestAgeSec int64 `json:"oldest_age_sec"`
 }

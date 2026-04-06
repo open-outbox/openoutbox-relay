@@ -7,37 +7,57 @@ import (
 	"github.com/google/uuid"
 )
 
+// Status represents the lifecycle stage of an event in the outbox.
 type Status string
 
 const (
-	StatusPending    Status = "PENDING"    // Ready to be picked up
-	StatusDelivering Status = "DELIVERING" // Currently being processed (Locked)
-	StatusDelivered  Status = "DELIVERED"  // Success!
-	StatusDead       Status = "DEAD"       // Failed too many times
+	// StatusPending indicates the event is ready to be picked up by a relay instance.
+	StatusPending Status = "PENDING"
+	// StatusDelivering indicates the event is currently locked and being processed by a relay instance.
+	StatusDelivering Status = "DELIVERING"
+	// StatusDelivered indicates the event was successfully published to the message broker.
+	StatusDelivered Status = "DELIVERED"
+	// StatusDead indicates the event failed delivery attempts beyond the retry limit and is quarantined.
+	StatusDead Status = "DEAD"
 )
 
+// IsTerminal returns true if the status represents a final state for the event.
 func (s Status) IsTerminal() bool {
 	return s == StatusDelivered || s == StatusDead
 }
 
+// Event represents a single unit of work from the outbox table.
+// It contains the message payload, metadata for routing, and delivery tracking information.
 type Event struct {
-	ID           uuid.UUID       `db:"event_id"      json:"id"`
-	Type         string          `db:"event_type"    json:"type"`
-	PartitionKey string          `db:"partition_key" json:"partition_key"`
-	Payload      []byte          `db:"payload"       json:"payload"`
-	Headers      json.RawMessage `db:"headers"       json:"headers"`
+	// ID is the unique identifier for the event (UUID v4/v7 recommended).
+	ID uuid.UUID `db:"event_id"      json:"id"`
+	// Type defines the subject/topic the message should be published to.
+	Type string `db:"event_type"    json:"type"`
+	// PartitionKey is used for load balancing on the broker side if supported
+	PartitionKey string `db:"partition_key" json:"partition_key"`
+	// Payload is the raw message body.
+	Payload []byte `db:"payload"       json:"payload"`
+	// Headers is a JSON blob containing custom message attributes/headers.
+	Headers json.RawMessage `db:"headers"       json:"headers"`
 
-	// Delivery status
+	// Attempts tracks the number of times this event has been tried for delivery.
 	Attempts int `db:"attempts"   json:"attempts"`
 
-	// Time fields
+	// CreatedAt is the timestamp when the event was first inserted into the database.
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 }
 
+// FailedEvent is a container used to report processing failures back to the storage layer.
+// It includes the updated status and scheduling information for the next retry.
 type FailedEvent struct {
-	ID          uuid.UUID `json:"id"           db:"id"`
-	NewStatus   Status    `json:"new_status"   db:"status"`
+	// ID of the event that failed.
+	ID uuid.UUID `json:"id"           db:"id"`
+	// NewStatus is the state the event should transition to (PENDING or DEAD).
+	NewStatus Status `json:"new_status"   db:"status"`
+	// AvailableAt is the time when the event becomes eligible for retry.
 	AvailableAt time.Time `json:"available_at" db:"available_at"`
-	Attempts    int       `json:"attempts"     db:"attempts"`
-	LastError   string    `json:"last_error"   db:"last_error"`
+	// Attempts is the incremented count of delivery tries.
+	Attempts int `json:"attempts"     db:"attempts"`
+	// LastError captures the error message from the publisher for diagnostics.
+	LastError string `json:"last_error"   db:"last_error"`
 }

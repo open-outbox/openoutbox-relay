@@ -12,7 +12,13 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-// KafkaConfig holds all the externalized settings for the Kafka publisher.
+// KafkaConfig holds the configuration for the Kafka publisher.
+// It maps directly to the settings used by the segmentio/kafka-go writer,
+// allowing for fine-grained control over batching, timeouts, and durability.
+//
+// Note: In the context of this relay, BatchSize is typically set to 1
+// to ensure the relay's internal batching logic remains the primary
+// driver of delivery frequency.
 type KafkaConfig struct {
 	Brokers      string
 	MaxAttempts  int
@@ -26,12 +32,17 @@ type KafkaConfig struct {
 	RequiredAcks kafka.RequiredAcks
 }
 
-// Kafka implements the relay.Publisher interface using the segmentio/kafka-go client.
+// Kafka is a publisher that writes messages to an Apache Kafka cluster.
+// It implements the relay.Publisher interface.
 type Kafka struct {
 	writer *kafka.Writer
 }
 
 // NewKafka initializes a new Kafka writer with strict ordering and safety.
+// It handles the parsing of broker URLs (stripping kafka:// prefixes)
+// and configures the underlying writer with a Hash balancer to ensure
+// messages with the same PartitionKey are always routed to the same
+// Kafka partition.
 func NewKafka(cfg KafkaConfig) *Kafka {
 	brokerList := strings.Split(strings.TrimPrefix(cfg.Brokers, "kafka://"), ",")
 
@@ -55,7 +66,10 @@ func NewKafka(cfg KafkaConfig) *Kafka {
 	}
 }
 
-// Publish writes the event to Kafka using the PartitionKey for ordering.
+// Publish sends a single event to Kafka.
+// It maps the domain event to a Kafka message, using the Event.Type as the topic.
+// If the operation fails, it wraps the error in a relay.PublishError,
+// classifying it as retryable based on the Kafka error code.
 func (k *Kafka) Publish(ctx context.Context, event relay.Event) error {
 	msg, err := k.mapToKafkaMessage(event)
 	if err != nil {
@@ -72,7 +86,11 @@ func (k *Kafka) Publish(ctx context.Context, event relay.Event) error {
 	return nil
 }
 
-// PublishBatch writes multiple events in a single Kafka request.
+// PublishBatch writes a slice of events to Kafka in a single transaction/request.
+// This is highly efficient for high-volume relays. If any individual message
+// mapping fails (e.g., malformed headers), the entire batch operation returns
+// an error immediately. The segmentio driver handles the actual transport
+// level batching and acknowledgment.
 func (k *Kafka) PublishBatch(ctx context.Context, events []relay.Event) error {
 	if len(events) == 0 {
 		return nil
@@ -100,7 +118,10 @@ func (k *Kafka) PublishBatch(ctx context.Context, events []relay.Event) error {
 	return nil
 }
 
-// mapToKafkaMessage is a helper to convert our domain Event to a Kafka message.
+// mapToKafkaMessage transforms a generic relay.Event into a kafka.Message.
+// It handles JSON unmarshaling of headers, sets the message key from the
+// PartitionKey, and injects the X-Event-ID header to allow for
+// downstream deduplication.
 func (k *Kafka) mapToKafkaMessage(event relay.Event) (kafka.Message, error) {
 	var kafkaKey []byte
 	if event.PartitionKey != "" {
@@ -136,8 +157,8 @@ func (k *Kafka) mapToKafkaMessage(event relay.Event) (kafka.Message, error) {
 	}, nil
 }
 
-// Close gracefully shuts down the Kafka writer.
-// It ensures all buffered messages are flushed to the brokers before closing.
+// Close gracefully shuts down the Kafka publisher.
+// It blocks until all buffered messages are flushed or the context expires.
 func (k *Kafka) Close() error {
 	if k.writer == nil {
 		return nil
@@ -152,7 +173,10 @@ func (k *Kafka) Close() error {
 	return nil
 }
 
-// TODO: Sanity check
+// isKafkaErrorRetryable classifies Kafka-specific errors to determine
+// if the relay should attempt to republish the message.
+// It considers network timeouts, connection issues, and temporary
+// broker-side states as retryable.
 func isKafkaErrorRetryable(err error) bool {
 	if err == nil {
 		return false

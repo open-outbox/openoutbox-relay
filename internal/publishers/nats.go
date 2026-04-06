@@ -13,13 +13,17 @@ import (
 )
 
 // Nats is a JetStream-powered publisher for At-Least-Once delivery.
+// It implements the relay.Publisher interface by publishing messages to NATS subjects
+// that are backed by a JetStream stream for durability.
 type Nats struct {
 	conn           *nats.Conn
 	js             nats.JetStreamContext
 	publishTimeout time.Duration
 }
 
-// NewNats establishes a JetStream connection.
+// NewNats establishes a connection to a NATS server and initializes a JetStream context.
+// It sets a client name "OpenOutbox-Relay" on the connection to facilitate easier
+// identification in NATS monitoring tools.
 func NewNats(url string, publishTimeout time.Duration) (*Nats, error) {
 	nc, err := nats.Connect(url, nats.Name("OpenOutbox-Relay"))
 	if err != nil {
@@ -35,7 +39,14 @@ func NewNats(url string, publishTimeout time.Duration) (*Nats, error) {
 	return &Nats{conn: nc, js: js, publishTimeout: publishTimeout}, nil
 }
 
-// Publish ensures the message is persisted in NATS JetStream before returning.
+// Publish sends an event to NATS JetStream.
+// It maps the domain Event.Type to the NATS subject and translates JSON headers
+// into NATS message headers.
+// It automatically sets the "Nats-Msg-Id" header using the Event ID to enable
+// JetStream's built-in idempotent publishing (message deduplication).
+//
+// If the connection is closed or the publish fails, it returns a relay.PublishError,
+// classifying the failure as retryable based on NATS-specific error codes.
 func (n *Nats) Publish(ctx context.Context, event relay.Event) error {
 	if n.conn.IsClosed() {
 		return &relay.PublishError{
@@ -68,7 +79,7 @@ func (n *Nats) Publish(ctx context.Context, event relay.Event) error {
 		msg.Header.Set("X-Partition-Key", event.PartitionKey)
 	}
 
-	pubCtx, cancel := context.WithTimeout(ctx, n.publishTimeout*time.Second)
+	pubCtx, cancel := context.WithTimeout(ctx, n.publishTimeout)
 	defer cancel()
 
 	_, err := n.js.PublishMsg(msg, nats.Context(pubCtx))
@@ -84,6 +95,7 @@ func (n *Nats) Publish(ctx context.Context, event relay.Event) error {
 	return nil
 }
 
+// Close gracefully shuts down the NATS connection.
 func (n *Nats) Close() error {
 	if n.conn != nil {
 		n.conn.Close()
@@ -91,6 +103,10 @@ func (n *Nats) Close() error {
 	return nil
 }
 
+// isNatsErrorRetryable evaluates whether a NATS error should trigger a retry attempt.
+// It considers network timeouts and connection issues as retryable, while marking
+// permanent failures like authorization errors, invalid subjects, or payload
+// limit violations as non-retryable.
 func isNatsErrorRetryable(err error) bool {
 
 	if err == nil {

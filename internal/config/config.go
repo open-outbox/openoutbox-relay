@@ -91,10 +91,10 @@ type Config struct {
 	//	0.15
 	RetryJitter float64 `mapstructure:"RETRY_JITTER"`
 
-	// NatsFlushTimeout is the maximum time to wait for the NATS publisher to flush pending messages during
-	// shutdown or batching.
+	// NatsPublishTimeout is the maximum time to wait for the NATS publisher to publish a message to
+	// the NATs broker.
 	//	Default: "5s"
-	NatsFlushTimeout time.Duration `mapstructure:"NATS_FLUSH_TIMEOUT"`
+	NatsPublishTimeout time.Duration `mapstructure:"NATS_PUBLISH_TIMEOUT"`
 
 	// KafkaMaxAttempts is the number of write attempts...
 	//	Default: 5
@@ -178,7 +178,7 @@ func Load() (*Config, error) {
 	v.SetDefault("RETRY_JITTER", DefaultRetryJitter)
 
 	//Nats Relay-Optimized Defaults
-	v.SetDefault("NATS_FLUSH_TIMEOUT", "5s")
+	v.SetDefault("NATS_PUBLISH_TIMEOUT", "5s")
 
 	// Kafka Relay-Optimized Defaults
 	// We set KAFKA_BATCH_SIZE to 1. Since our Relay Engine already batches

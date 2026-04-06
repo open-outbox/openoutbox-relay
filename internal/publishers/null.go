@@ -19,11 +19,10 @@ func NewNull() *Null {
 // Publish satisfies the relay.Publisher interface.
 // It effectively "black holes" the event and immediately reports success.
 func (s *Null) Publish(ctx context.Context, event relay.Event) error {
-	// For performance testing, we return a successful result immediately.
-	// We use the Event ID as the ProviderID to simulate a real audit trail.
 	return nil
 }
 
+// Does nothing
 func (s *Null) Close() error {
 	return nil
 }

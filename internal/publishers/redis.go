@@ -13,12 +13,14 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Redis is a publisher implementation that pushes events into Redis Streams (XADD).
+// Redis is a publisher that pushes events into Redis Streams using the XADD command.
+// It implements the relay.Publisher interface.
 type Redis struct {
 	client *redis.Client
 }
 
 // NewRedis establishes a connection to a Redis server.
+// It validates the connection with a Ping before returning.
 // It accepts redis URLs like "redis://<user>:<pass>@localhost:6379/0" .
 func NewRedis(url string) (*Redis, error) {
 	opts, err := redis.ParseURL(strings.TrimPrefix(url, "redis://"))
@@ -39,8 +41,12 @@ func NewRedis(url string) (*Redis, error) {
 	return &Redis{client: client}, nil
 }
 
-// Publish satisfies the relay.Publisher interface.
-// Publish appends the event to a Redis Stream using the event type as the Stream name.
+// Publish appends the event to a Redis Stream.
+// It uses the Event.Type as the stream name. The event ID and Payload are
+// stored as fields within the stream entry.
+//
+// If publishing fails, it classifies the error as retryable if it indicates
+// a transient issue like network disruption or a cluster resharding event.
 func (r *Redis) Publish(ctx context.Context, event relay.Event) error {
 
 	err := r.client.XAdd(ctx, &redis.XAddArgs{
@@ -62,6 +68,10 @@ func (r *Redis) Publish(ctx context.Context, event relay.Event) error {
 	return nil
 }
 
+// isRedisErrorRetryable evaluates whether a Redis error is transient and warrants a retry.
+// It handles connection issues, pool timeouts, and server-side states (OOM, Loading, ReadOnly).
+// It also specifically handles Redis Cluster redirection errors (MOVED, ASK) which are
+// considered retryable as the client will automatically update its slot map.
 func (r *Redis) isRedisErrorRetryable(err error) bool {
 
 	if err == nil {
@@ -113,9 +123,7 @@ func (r *Redis) isRedisErrorRetryable(err error) bool {
 	return false
 }
 
-// Close gracefully shuts down the Redis client and its connection pool.
-// It returns an error if any of the underlying pool connections
-// fail to close cleanly.
+// Close gracefully shuts down the Redis client and its underlying connection pool.
 func (r *Redis) Close() error {
 	if r.client == nil {
 		return nil

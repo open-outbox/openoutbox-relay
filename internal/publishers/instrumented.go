@@ -14,6 +14,9 @@ import (
 	"go.uber.org/zap"
 )
 
+// InstrumentedPublisher is a decorator that wraps a base relay.Publisher
+// to provide transparent observability. It automatically records OpenTelemetry
+// traces, Prometheus metrics, and structured logs for every publish operation.
 type InstrumentedPublisher struct {
 	publisher relay.Publisher
 	logger    *zap.Logger
@@ -22,6 +25,8 @@ type InstrumentedPublisher struct {
 	meter     metric.Meter
 }
 
+// NewInstrumentedPublisher returns a new publisher wrapper configured with the
+// provided telemetry components.
 func NewInstrumentedPublisher(p relay.Publisher, tel telemetry.Telemetry) *InstrumentedPublisher {
 	return &InstrumentedPublisher{
 		publisher: p,
@@ -32,6 +37,10 @@ func NewInstrumentedPublisher(p relay.Publisher, tel telemetry.Telemetry) *Instr
 	}
 }
 
+// Publish wraps the underlying publisher's Publish method. It creates a new
+// trace span, records the start time for latency metrics, and captures any
+// errors. It ensures that delivery metrics include both the event type and
+// the final outcome (success/failure) for granular monitoring.
 func (ip *InstrumentedPublisher) Publish(ctx context.Context, event relay.Event) error {
 	ctx, span := ip.tracer.Start(ctx, "Publisher.Publish",
 		trace.WithAttributes(
@@ -73,6 +82,7 @@ func (ip *InstrumentedPublisher) Publish(ctx context.Context, event relay.Event)
 	return err
 }
 
+// Close closes the underlying publisher.
 func (ip *InstrumentedPublisher) Close() error {
 	return ip.publisher.Close()
 }

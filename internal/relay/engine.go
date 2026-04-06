@@ -111,7 +111,7 @@ func (e *Engine) Start(ctx context.Context) error {
 				count, err := e.process(gCtx)
 				if err != nil {
 					// We log and wait; the errgroup will catch critical errors if 'process' returns them.
-					e.LogIfError(err, "Batch processing failed")
+					e.logIfError(err, "Batch processing failed")
 					time.Sleep(e.interval)
 					continue
 				}
@@ -176,7 +176,7 @@ func (e *Engine) reapExpiredLeases(ctx context.Context) error {
 
 	_, err := e.storage.ReapExpiredLeases(ctx, e.leaseTimeout, e.reapBatchSize)
 
-	e.LogIfError(err, "failed to fetch events.", zap.Error(err))
+	e.logIfError(err, "failed to fetch events.", zap.Error(err))
 
 	for {
 		select {
@@ -184,9 +184,57 @@ func (e *Engine) reapExpiredLeases(ctx context.Context) error {
 			return ctx.Err()
 		case <-ticker.C:
 			_, err := e.storage.ReapExpiredLeases(ctx, e.leaseTimeout, e.reapBatchSize)
-			e.LogIfError(err, "failed to fetch events.", zap.Error(err))
+			e.logIfError(err, "failed to fetch events.", zap.Error(err))
 		}
 	}
+}
+
+func (e *Engine) process(ctx context.Context) (int, error) {
+
+	e.logger.Debug("Engine processing...")
+
+	// Start the Parent Span for the entire batch
+	ctx, span := e.tracer.Start(ctx, "Engine.Process",
+		trace.WithAttributes(attribute.Int("batch.size_requested", e.batchSize)))
+	defer span.End()
+
+	events, err := e.claimBatch(ctx)
+	if err != nil || len(events) == 0 {
+		return 0, err
+	}
+
+	var successIDs []uuid.UUID
+	var failedEvents []FailedEvent
+
+	if e.enableBatchPublish {
+		successIDs, failedEvents, err = e.publishBatch(ctx, events)
+	} else {
+		successIDs, failedEvents, err = e.publishOnByOne(ctx, events)
+	}
+
+	if err != nil {
+		return 0, err
+	}
+
+	if len(successIDs) > 0 {
+		if err := e.markDelivered(ctx, successIDs); err != nil {
+			return 0, err
+		}
+	}
+
+	if len(failedEvents) > 0 {
+		if err := e.markFailed(ctx, failedEvents); err != nil {
+			return 0, err
+		}
+	}
+
+	e.logger.Info("process completed",
+		zap.Int("count", len(events)),
+		zap.Int("successful", len(successIDs)),
+		zap.Int("failed", len(failedEvents)),
+	)
+
+	return len(events), nil
 }
 
 func (e *Engine) claimBatch(ctx context.Context) ([]Event, error) {
@@ -207,7 +255,7 @@ func (e *Engine) claimBatch(ctx context.Context) ([]Event, error) {
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		e.LogIfError(err, "failed to fetch events", zap.Error(err))
+		e.logIfError(err, "failed to fetch events", zap.Error(err))
 		return nil, err
 	}
 
@@ -217,104 +265,56 @@ func (e *Engine) claimBatch(ctx context.Context) ([]Event, error) {
 	return events, nil
 }
 
-func (e *Engine) process(ctx context.Context) (int, error) {
-
-	e.logger.Debug("Engine processing...")
-
-	// Start the Parent Span for the entire batch
-	ctx, span := e.tracer.Start(ctx, "Engine.Process",
-		trace.WithAttributes(attribute.Int("batch.size_requested", e.batchSize)))
+func (e *Engine) markDelivered(ctx context.Context, ids []uuid.UUID) error {
+	ctx, span := e.tracer.Start(ctx, "Storage.MarkDeliveredBatch",
+		trace.WithAttributes(attribute.Int("batch.size", len(ids))))
 	defer span.End()
 
-	events, err := e.claimBatch(ctx)
+	start := time.Now()
+	err := e.storage.MarkDeliveredBatch(ctx, ids, e.relayId)
+
+	status := "success"
 	if err != nil {
-		return 0, err
+		status = "error"
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		e.logIfError(err, "failed to mark batch as delivered", zap.Error(err))
 	}
 
-	if len(events) == 0 {
-		return 0, nil
-	}
+	e.metrics.StorageLatency.Record(ctx, time.Since(start).Seconds(),
+		metric.WithAttributes(
+			attribute.String("op", "mark_delivered"),
+			attribute.String("status", status),
+		),
+	)
 
-	var successEvents []uuid.UUID
-	var failedEvents []FailedEvent
+	return err
+}
 
-	if e.enableBatchPublish {
-		successEvents, failedEvents, err = e.publishBatch(ctx, events)
-	} else {
-		successEvents, failedEvents, err = e.publishOnByOne(ctx, events)
-	}
+func (e *Engine) markFailed(ctx context.Context, failures []FailedEvent) error {
+	ctx, span := e.tracer.Start(ctx, "Storage.MarkFailedBatch",
+		trace.WithAttributes(attribute.Int("batch.size", len(failures))))
+	defer span.End()
 
+	start := time.Now()
+	err := e.storage.MarkFailedBatch(ctx, failures, e.relayId)
+
+	status := "success"
 	if err != nil {
-		return 0, err
+		status = "error"
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		e.logIfError(err, "failed to mark failure batch", zap.Error(err))
 	}
 
-	if len(successEvents) > 0 {
-		_, finalizeSpan := e.tracer.Start(ctx, "Storage.MarkDeliveredBatch")
-		finalizeSpan.SetAttributes(attribute.Int("batch.size", len(successEvents)))
+	e.metrics.StorageLatency.Record(ctx, time.Since(start).Seconds(),
+		metric.WithAttributes(
+			attribute.String("op", "mark_failed"),
+			attribute.String("status", status),
+		),
+	)
 
-		finalizeStart := time.Now()
-		err := e.storage.MarkDeliveredBatch(ctx, successEvents, e.relayId)
-
-		status := "success"
-		if err != nil {
-			status = "error"
-		}
-		e.metrics.StorageLatency.Record(ctx, time.Since(finalizeStart).Seconds(),
-			metric.WithAttributes(
-				attribute.String("op", "mark_delivered"),
-				attribute.String("status", status),
-			),
-		)
-
-		if err != nil {
-			finalizeSpan.RecordError(err)
-			finalizeSpan.SetStatus(codes.Error, err.Error())
-			e.LogIfError(err, "failed to mark batch as delivered", zap.Error(err))
-			finalizeSpan.End()
-			return 0, err
-		}
-		finalizeSpan.End()
-
-	}
-
-	if len(failedEvents) > 0 {
-		_, failSpan := e.tracer.Start(ctx, "Storage.MarkFailedBatch")
-		failSpan.SetAttributes(attribute.Int("batch.size", len(failedEvents)))
-
-		failStart := time.Now()
-		err := e.storage.MarkFailedBatch(ctx, failedEvents, e.relayId)
-
-		// Record Database Latency for the Failure Update
-		status := "success"
-		if err != nil {
-			status = "error"
-		}
-		e.metrics.StorageLatency.Record(ctx, time.Since(failStart).Seconds(),
-			metric.WithAttributes(
-				attribute.String("op", "mark_failed"),
-				attribute.String("status", status),
-			),
-		)
-
-		if err != nil {
-			failSpan.RecordError(err)
-			failSpan.SetStatus(codes.Error, err.Error())
-			failSpan.End()
-			e.LogIfError(err, "failed to mark failure batch", zap.Error(err))
-			return 0, err
-		}
-		failSpan.End()
-	}
-
-	if len(events) > 0 {
-		e.logger.Info("batch completed",
-			zap.Int("count", len(events)),
-			zap.Int("successful", len(successEvents)),
-			zap.Int("failed", len(failedEvents)),
-		)
-	}
-
-	return len(events), nil
+	return err
 }
 
 func (e *Engine) publishOnByOne(
@@ -467,7 +467,7 @@ func generateRelayID() string {
 	return fmt.Sprintf("%s-%s", hostname, suffix)
 }
 
-func (e *Engine) LogIfError(err error, msg string, fields ...zap.Field) {
+func (e *Engine) logIfError(err error, msg string, fields ...zap.Field) {
 	if err == nil || errors.Is(err, context.Canceled) {
 		return
 	}

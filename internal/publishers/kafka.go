@@ -179,7 +179,7 @@ func (k *Kafka) Close() error {
 // broker-side states as retryable.
 func isKafkaErrorRetryable(err error) bool {
 	if err == nil {
-		return false
+		return true
 	}
 
 	if isContextError(err) {
@@ -190,16 +190,32 @@ func isKafkaErrorRetryable(err error) bool {
 	if errors.As(err, &writeErrs) {
 		for _, e := range writeErrs {
 			if e != nil {
-				return isKafkaErrorRetryable(e)
+				if !isIndividualKafkaErrorRetryable(e) {
+					return false
+				}
 			}
 		}
+		return true
+	}
+
+	return isIndividualKafkaErrorRetryable(err)
+}
+
+func isIndividualKafkaErrorRetryable(err error) bool {
+	var kErr kafka.Error
+	if !errors.As(err, &kErr) {
+		return true
+	}
+
+	switch kErr {
+	case
+		kafka.InvalidMessage,
+		kafka.UnknownTopicOrPartition,
+		kafka.InvalidMessageSize,
+		kafka.MessageSizeTooLarge,
+		kafka.InvalidTopic:
 		return false
+	default:
+		return true
 	}
-
-	var tempErr interface{ Temporary() bool }
-	if errors.As(err, &tempErr) {
-		return tempErr.Temporary()
-	}
-
-	return false
 }

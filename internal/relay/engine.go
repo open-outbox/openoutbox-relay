@@ -189,6 +189,34 @@ func (e *Engine) reapExpiredLeases(ctx context.Context) error {
 	}
 }
 
+func (e *Engine) claimBatch(ctx context.Context) ([]Event, error) {
+	// Start a child span for the storage operation
+	ctx, span := e.tracer.Start(ctx, "Storage.ClaimBatch")
+	defer span.End()
+
+	start := time.Now()
+
+	// Perform the actual storage call using the pre-allocated buffer
+	events, err := e.storage.ClaimBatch(ctx, e.relayId, e.batchSize, e.events)
+
+	// Record metrics
+	e.metrics.StorageLatency.Record(ctx, time.Since(start).Seconds(),
+		metric.WithAttributes(attribute.String("op", "claim")))
+	e.metrics.BatchSize.Record(ctx, int64(len(events)))
+
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		e.LogIfError(err, "failed to fetch events", zap.Error(err))
+		return nil, err
+	}
+
+	// Set attributes for the actual number of events found
+	span.SetAttributes(attribute.Int("batch.size_actual", len(events)))
+
+	return events, nil
+}
+
 func (e *Engine) process(ctx context.Context) (int, error) {
 
 	e.logger.Debug("Engine processing...")
@@ -198,31 +226,23 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 		trace.WithAttributes(attribute.Int("batch.size_requested", e.batchSize)))
 	defer span.End()
 
-	claimStart := time.Now()
-	// Claim a batch of events
-	events, err := e.storage.ClaimBatch(ctx, e.relayId, e.batchSize, e.events)
+	events, err := e.claimBatch(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		e.LogIfError(err, "failed to fetch events.", zap.Error(err))
 		return 0, err
 	}
 
-	e.metrics.StorageLatency.Record(ctx, time.Since(claimStart).Seconds(),
-		metric.WithAttributes(attribute.String("op", "claim")))
-	e.metrics.BatchSize.Record(ctx, int64(len(events)))
-
-	// Record number of claimed events
-	span.SetAttributes(attribute.Int("batch.size_actual", len(events)))
+	if len(events) == 0 {
+		return 0, nil
+	}
 
 	var successEvents []uuid.UUID
 	var failedEvents []FailedEvent
 
-	// if e.enableBatchPublish {
-	// successEvents, failedEvents, err = e.publishBatch(ctx, events)
-	// } else {
-	successEvents, failedEvents, err = e.publishOnByOne(ctx, events)
-	// }
+	if e.enableBatchPublish {
+		successEvents, failedEvents, err = e.publishBatch(ctx, events)
+	} else {
+		successEvents, failedEvents, err = e.publishOnByOne(ctx, events)
+	}
 
 	if err != nil {
 		return 0, err

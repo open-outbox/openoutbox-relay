@@ -14,17 +14,23 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0" // Ensure this is imported
 )
 
-// OTelProviders holds the concrete SDK providers (for shutdown)
-// and the initialized interfaces (for injection).
+// OTelProviders manages the lifecycle of OpenTelemetry SDK components.
+// It holds the concrete Tracer and Meter providers and provides a unified
+// Shutdown function to ensure all telemetry data is flushed before the
+// application exits.
 type OTelProviders struct {
 	TraceProvider *trace.TracerProvider
 	MeterProvider *metric.MeterProvider
-	Shutdown      func(context.Context) error
+	// Shutdown performs a graceful shutdown of both trace and meter providers.
+	Shutdown func(context.Context) error
 }
 
+// serviceName defines the default name for this service in the OpenTelemetry ecosystem.
 const serviceName = "openoutbox-relay"
 
 // NewOTelProviders bootstraps the OpenTelemetry pipeline.
+// It initializes the global propagator, creates a shared resource with service metadata,
+// and configures auto-exporting providers for both traces and metrics.
 func NewOTelProviders(ctx context.Context) (*OTelProviders, error) {
 	var shutdownFuncs []func(context.Context) error
 	var err error
@@ -70,6 +76,8 @@ func NewOTelProviders(ctx context.Context) (*OTelProviders, error) {
 	}, nil
 }
 
+// newPropagator creates a composite propagator that handles both 
+// W3C Trace Context and Baggage.
 func newPropagator() propagation.TextMapPropagator {
 	return propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
@@ -77,16 +85,20 @@ func newPropagator() propagation.TextMapPropagator {
 	)
 }
 
+// newResource returns a resource describing this application, merging 
+// default attributes with the service identification metadata.
 func newResource() (*resource.Resource, error) {
 
 	return resource.Merge(
 		resource.Default(),
 		resource.NewWithAttributes(
 			"",
-			semconv.ServiceName("github.com/open-outbox/relay"),
+			semconv.ServiceName(InstrumentationName),
 		))
 }
 
+// newTracerProvider initializes a TracerProvider with a batch span processor 
+// and an automatically detected exporter (OTLP, Jaeger, etc.).
 func newTracerProvider(res *resource.Resource) (*trace.TracerProvider, error) {
 	ctx := context.Background()
 
@@ -103,6 +115,10 @@ func newTracerProvider(res *resource.Resource) (*trace.TracerProvider, error) {
 	return tp, nil
 }
 
+// newMeterProvider initializes a MeterProvider with a metric reader 
+// and custom views for histograms. It defines specific bucket boundaries 
+// for latencies (logarithmic scale) and batch sizes to ensure meaningful 
+// observability in dashboards.
 func newMeterProvider(res *resource.Resource) (*metric.MeterProvider, error) {
 	ctx := context.Background()
 	batchBuckets := []float64{1, 5, 10, 25, 50, 75, 100, 250, 500, 1000}

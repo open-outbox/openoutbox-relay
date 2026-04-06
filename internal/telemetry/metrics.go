@@ -4,29 +4,46 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-const (
-	instrumentationName = "github.com/open-outbox/relay/engine"
-)
-
+// Metrics holds the set of OpenTelemetry metric instruments used to monitor
+// the health and performance of the Outbox Relay.
 type Metrics struct {
-	// BatchSize tracks the number of events fetched in a single claim operation
+	// BatchSize tracks the number of events fetched from the database in a
+	// single claim operation. This helps monitor if the relay is keeping
+	// up with the ingestion rate.
 	BatchSize metric.Int64Histogram
-	// EventsTotal tracks throughput with labels: status (success/failed), type (event_type)
+
+	// EventsTotal is a counter that tracks the total number of events processed.
+	// Typical attributes include 'status' (success/failed) and 'type' (event type).
 	EventsTotal metric.Int64Counter
-	// EndToEndLatency tracks time from event.CreatedAt to successful delivery
+
+	// EndToEndLatency measures the total time elapsed from the moment an event
+	// was created in the database until it was successfully acknowledged by
+	// the message broker.
 	EndToEndLatency metric.Float64Histogram
-	// StorageLatency tracks DB ops with label: op (claim, mark_delivered, mark_failed)
+
+	// StorageLatency measures the duration of individual database operations.
+	// Typical attributes include 'op' (e.g., claim, mark_delivered, mark_failed).
 	StorageLatency metric.Float64Histogram
-	// PublisherLatency tracks Broker ops with label: provider (kafka, nats, redis)
+
+	// PublisherLatency measures how long it takes to publish a message to the
+	// broker.
 	PublisherLatency metric.Float64Histogram
-	// Number of active pending events
+
+	// PendingGauge represents the current number of events sitting in the
+	// outbox table with a 'PENDING' status.
 	PendingGauge metric.Int64Gauge
-	// The oldest event pending gauge
+
+	// OldestPendingSeconds tracks the age of the oldest pending event in the
+	// queue, providing a direct measurement of "lag".
 	OldestPendingSeconds metric.Int64Gauge
 }
 
+// NewMetrics initializes the Metrics struct by creating instruments through
+// the provided MeterProvider. It defines the descriptions and units for
+// each metric to ensure they are correctly represented in observability
+// backends.
 func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) {
-	meter := meterProvider.Meter(instrumentationName)
+	meter := meterProvider.Meter(InstrumentationName)
 	m := &Metrics{}
 	var err error
 

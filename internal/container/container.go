@@ -22,10 +22,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// instrumentationName is the unique identifier used for OpenTelemetry tracing and metrics
-// associated with the relay's internal operations.
-const instrumentationName = "github.com/open-outbox/relay"
-
 // BuildContainer initializes and returns a dig.Container with all application dependencies wired.
 // It handles the construction of the logger, telemetry providers, database storage,
 // and the message publisher based on the loaded configuration.
@@ -65,8 +61,8 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 			return telemetry.Telemetry{
 				Logger:  logger,
 				Metrics: metrics,
-				Tracer:  tp.Tracer(instrumentationName),
-				Meter:   mp.Meter(instrumentationName),
+				Tracer:  tp.Tracer(telemetry.InstrumentationName),
+				Meter:   mp.Meter(telemetry.InstrumentationName),
 			}
 		},
 		// Storage provider: selects and initializes the DB driver based on configuration.
@@ -92,7 +88,7 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 		func(cfg *config.Config) (relay.Publisher, error) {
 			switch cfg.PublisherType {
 			case "nats":
-				return publishers.NewNats(cfg.PublisherURL, cfg.NatsFlushTimeout)
+				return publishers.NewNats(cfg.PublisherURL, cfg.NatsPublishTimeout)
 
 			case "kafka":
 				return buildKafkaPublisher(*cfg)

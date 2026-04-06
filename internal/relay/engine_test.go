@@ -24,12 +24,20 @@ func (m *MockStorage) ClaimBatch(ctx context.Context, relayId string, size int) 
 	return args.Get(0).([]Event), args.Error(1)
 }
 
-func (m *MockStorage) MarkDeliveredBatch(ctx context.Context, ids []uuid.UUID, relayId string) error {
+func (m *MockStorage) MarkDeliveredBatch(
+	ctx context.Context,
+	ids []uuid.UUID,
+	relayId string,
+) error {
 	args := m.Called(ctx, ids, relayId)
 	return args.Error(0)
 }
 
-func (m *MockStorage) MarkFailedBatch(ctx context.Context, failed []FailedEvent, relayId string) error {
+func (m *MockStorage) MarkFailedBatch(
+	ctx context.Context,
+	failed []FailedEvent,
+	relayId string,
+) error {
 	args := m.Called(ctx, failed, relayId)
 	return args.Error(0)
 }
@@ -39,7 +47,11 @@ func (m *MockStorage) GetStats(ctx context.Context) (Stats, error) {
 	return args.Get(0).(Stats), args.Error(1)
 }
 
-func (m *MockStorage) ReapExpiredLeases(ctx context.Context, leaseTimeout time.Duration, limit int) (int64, error) {
+func (m *MockStorage) ReapExpiredLeases(
+	ctx context.Context,
+	leaseTimeout time.Duration,
+	limit int,
+) (int64, error) {
 	args := m.Called()
 	return args.Get(0).(int64), args.Error(1)
 }
@@ -105,7 +117,12 @@ func TestRetryPolicy_NextBackoff(t *testing.T) {
 
 		// Note: There's a tiny chance they match, but in a test,
 		// this proves the random seed is working.
-		assert.NotEqual(t, d1.Nanoseconds(), d2.Nanoseconds(), "Jitter should provide different results")
+		assert.NotEqual(
+			t,
+			d1.Nanoseconds(),
+			d2.Nanoseconds(),
+			"Jitter should provide different results",
+		)
 	})
 }
 
@@ -194,7 +211,8 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 	// Failure side: (Notice we check for id2 here)
 	mockStorage.On("MarkFailedBatch", mock.Anything, mock.MatchedBy(func(failed []FailedEvent) bool {
 		return len(failed) == 1 && failed[0].ID == id2
-	}), "change latter").Return(nil)
+	}), "change latter").
+		Return(nil)
 
 	// Initialize & Run
 	// 3. Initialize Engine

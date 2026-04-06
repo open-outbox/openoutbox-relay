@@ -45,7 +45,9 @@ func main() {
 			Type:         "event.user.signup",
 			PartitionKey: fmt.Sprintf("user-%d", i%100),
 			Payload:      []byte("binary data payload simulation"),
-			Headers:      json.RawMessage(`{"source": "load-test-script", "trace_id": "` + uuid.New().String() + `"}`),
+			Headers: json.RawMessage(
+				`{"source": "load-test-script", "trace_id": "` + uuid.New().String() + `"}`,
+			),
 		}
 	}
 
@@ -69,7 +71,10 @@ func main() {
 			for k, v := range userHeaders {
 				kHeaders = append(kHeaders, kafka.Header{Key: k, Value: []byte(v)})
 			}
-			kHeaders = append(kHeaders, kafka.Header{Key: "X-Event-ID", Value: []byte(row.ID.String())})
+			kHeaders = append(
+				kHeaders,
+				kafka.Header{Key: "X-Event-ID", Value: []byte(row.ID.String())},
+			)
 
 			// 3. Build Message
 			kafkaBatch = append(kafkaBatch, kafka.Message{

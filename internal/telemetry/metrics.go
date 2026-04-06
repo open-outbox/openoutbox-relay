@@ -67,7 +67,9 @@ func NewMetrics(meterProvider metric.MeterProvider) (*Metrics, error) {
 
 	m.EndToEndLatency, err = meter.Float64Histogram(
 		"openoutbox.events.e2e_latency",
-		metric.WithDescription("Time from event creation in DB to successful publication (seconds)."),
+		metric.WithDescription(
+			"Time from event creation in DB to successful publication (seconds).",
+		),
 		metric.WithUnit("s"),
 	)
 	if err != nil {

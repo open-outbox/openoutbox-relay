@@ -220,7 +220,11 @@ func (p *Postgres) MarkFailedBatch(
 // This is a critical recovery mechanism. If a relay instance crashes while processing
 // a batch, this function allows other instances to eventually pick up those "orphaned"
 // events by moving them back to the PENDING state.
-func (p *Postgres) ReapExpiredLeases(ctx context.Context, leaseTimeout time.Duration, limit int) (int64, error) {
+func (p *Postgres) ReapExpiredLeases(
+	ctx context.Context,
+	leaseTimeout time.Duration,
+	limit int,
+) (int64, error) {
 	query := `
         WITH stuck_events AS (
             SELECT event_id 

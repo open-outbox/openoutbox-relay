@@ -337,7 +337,11 @@ func (e *Engine) publishOnByOne(
 			}
 
 			failedEvents = append(failedEvents, e.assessFailure(event, err))
-			e.metrics.EventsTotal.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "failed")))
+			e.metrics.EventsTotal.Add(
+				ctx,
+				1,
+				metric.WithAttributes(attribute.String("status", "failed")),
+			)
 
 			continue
 		}
@@ -346,7 +350,11 @@ func (e *Engine) publishOnByOne(
 
 		e.metrics.EndToEndLatency.Record(ctx, time.Since(event.CreatedAt).Seconds(),
 			metric.WithAttributes(attribute.String("type", event.Type)))
-		e.metrics.EventsTotal.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "success")))
+		e.metrics.EventsTotal.Add(
+			ctx,
+			1,
+			metric.WithAttributes(attribute.String("status", "success")),
+		)
 
 		e.logger.Debug("event published",
 			zap.String("event_id", event.ID.String()),

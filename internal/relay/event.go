@@ -41,7 +41,7 @@ type Event struct {
 	Headers json.RawMessage `db:"headers"       json:"headers"`
 
 	// Attempts tracks the number of times this event has been tried for delivery.
-	Attempts int `db:"attempts"   json:"attempts"`
+	Attempts int `db:"attempts" json:"attempts"`
 
 	// CreatedAt is the timestamp when the event was first inserted into the database.
 	CreatedAt time.Time `db:"created_at" json:"created_at"`

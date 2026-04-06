@@ -15,6 +15,7 @@ type Storage interface {
 		ctx context.Context,
 		relayID string,
 		batchSize int,
+		buf []Event,
 	) ([]Event, error)
 
 	// MarkDeliveredBatch moves a set of IDs to the final 'DELIVERED' state.

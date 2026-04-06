@@ -35,6 +35,7 @@ type Engine struct {
 	metrics       *telemetry.Metrics
 	tracer        trace.Tracer
 	meter         metric.Meter
+	events        []Event
 }
 
 // EngineParams handles the tuning and identity.
@@ -73,6 +74,7 @@ func NewEngine(
 		metrics:       tel.Metrics,
 		tracer:        tel.Tracer,
 		meter:         tel.Meter,
+		events:        make([]Event, params.BatchSize),
 	}
 }
 
@@ -195,7 +197,7 @@ func (e *Engine) process(ctx context.Context) (int, error) {
 
 	claimStart := time.Now()
 	// Claim a batch of events
-	events, err := e.storage.ClaimBatch(ctx, e.relayId, e.batchSize)
+	events, err := e.storage.ClaimBatch(ctx, e.relayId, e.batchSize, e.events)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())

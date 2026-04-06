@@ -26,6 +26,7 @@ func (p *Postgres) ClaimBatch(
 	ctx context.Context,
 	relayID string,
 	batchSize int,
+	buf []relay.Event,
 ) ([]relay.Event, error) {
 	query := `
         WITH target_events AS (
@@ -67,29 +68,28 @@ func (p *Postgres) ClaimBatch(
 	}
 	defer rows.Close()
 
-	var events []relay.Event
+	i := 0
 	for rows.Next() {
-		var e relay.Event
 		err := rows.Scan(
-			&e.ID,
-			&e.Type,
-			&e.PartitionKey,
-			&e.Payload,
-			&e.Headers,
-			&e.Attempts,
-			&e.CreatedAt,
+			&buf[i].ID,
+			&buf[i].Type,
+			&buf[i].PartitionKey,
+			&buf[i].Payload,
+			&buf[i].Headers,
+			&buf[i].Attempts,
+			&buf[i].CreatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("event scan error: %w", err)
 		}
-		events = append(events, e)
+		i++
 	}
 
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows stream error: %w", err)
 	}
 
-	return events, nil
+	return buf[:i], nil
 }
 
 func (p *Postgres) MarkDeliveredBatch(

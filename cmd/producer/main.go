@@ -25,7 +25,7 @@ func main() {
 	// Load config with fallbacks
 	dbURL := getEnv("STORAGE_URL", "postgres://postgres:postgres@localhost:5432/postgres")
 	eventType := getEnv("LOCAL_TEST_TOPIC", "outbox.events.v1")
-	batchSize, _ := strconv.Atoi(getEnv("PRODUCER_BATCH_SIZE", "1000"))
+	batchSize, _ := strconv.Atoi(getEnv("LOCAL_PRODUCER_BATCH_SIZE", "1000"))
 
 	intervalStr := getEnv("LOCAL_PRODUCER_INTERVAL", "1s")
 	interval, err := time.ParseDuration(intervalStr)

@@ -9,15 +9,13 @@ BINARY_NAME         := openoutbox-relay
 COMPOSE_FILE        := deployments/docker-compose.yaml
 MAIN_PACKAGE        := ./cmd/relay/main.go
 PRODUCER_PKG        := ./cmd/producer/main.go
-OTEL_ENDPOINT       := localhost:4317
+KAFKA_URL           := kafka:9092
+NATS_URL            := nats:4222
 
 # Map LOCAL_ env vars to internal Make variables for cleaner targets
 TOPIC_NAME          := $(LOCAL_TEST_TOPIC)
 NATS_STREAM         := $(LOCAL_NATS_STREAM)
 OTEL_TRACE_COUNT    := $(LOCAL_OTEL_TEST_TRACE_COUNT)
-
-# The wildcard subject used specifically for NATS JetStream
-NATS_SUBJECT        := $(TOPIC_NAME).>
 
 .PHONY: all build run producer test clean fmt lint up down setup docs help ps logs
 
@@ -116,17 +114,17 @@ setup:
 # Create the JetStream stream and bind the subject pattern
 nats-setup:
 	@chmod +x scripts/nats/setup-stream.sh
-	./scripts/nats/setup-stream.sh nats:4222 $(NATS_STREAM) "$(NATS_SUBJECT)"
+	./scripts/nats/setup-stream.sh $(NATS_URL) $(NATS_STREAM) "$(TOPIC_NAME)"
 
 # View a historical list of messages currently in the JetStream
 nats-view:
 	docker-compose -f $(COMPOSE_FILE) exec nats-box \
-		nats -s nats:4222 stream view $(NATS_STREAM)
+		nats -s $(NATS_URL) stream view $(NATS_STREAM)
 
 # Show detailed metadata, sequence numbers, and consumer counts for the stream
 nats-info:
 	docker-compose -f $(COMPOSE_FILE) exec nats-box \
-		nats -s nats:4222 stream info $(NATS_STREAM)
+		nats -s $(NATS_URL) stream info $(NATS_STREAM)
 
 # ==========================================
 # Kafka Management

@@ -13,36 +13,35 @@ KAFKA_URL           := kafka:9092
 NATS_URL            := nats:4222
 OTEL_ENDPOINT       := localhost:4317
 
-# Map LOCAL_ env vars to internal Make variables for cleaner targets
 TOPIC_NAME          := $(LOCAL_TEST_TOPIC)
 NATS_STREAM         := $(LOCAL_NATS_STREAM)
 OTEL_TRACE_COUNT    := $(LOCAL_OTEL_TEST_TRACE_COUNT)
-DB_TYPE 			:= $(STORAGE_TYPE)
+DB_TYPE             := $(STORAGE_TYPE)
 
-.PHONY: all build run producer test clean fmt lint up down setup docs help ps logs
+.PHONY: all build run producer test clean fmt lint up down setup help ps logs nats-setup nats-view nats-info kafka-setup kafka-list kafka-info kafka-tail test-otel db-init
 
-# Default target: Run the full development pipeline
-all: setup fmt lint build
+.DEFAULT_GOAL := help
+
+help: ## Display this help message
+	@grep -h -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+all: setup fmt lint build ## Run the full development pipeline (setup, fmt, lint, build)
 
 # ==========================================
 # Development & Execution
 # ==========================================
 
-# Run the Relay service locally using Go
-run:
+run: ## Run the Relay service locally using Go
 	go run $(MAIN_PACKAGE)
 
-# Run the Producer to generate dummy events for testing
-producer:
+producer: ## Run the Producer to generate dummy events for testing
 	go run $(PRODUCER_PKG)
 
-# Compile the Relay into a binary in the bin/ directory
-build:
+build: ## Compile the Relay into a binary in the bin/ directory
 	mkdir -p bin
 	go build -o bin/$(BINARY_NAME) $(MAIN_PACKAGE)
 
-# Remove build binaries and clear Go test cache
-clean:
+clean: ## Remove build binaries and clear Go test cache
 	rm -rf bin/
 	go clean -testcache
 
@@ -50,58 +49,47 @@ clean:
 # Quality & Linting
 # ==========================================
 
-# Format code, organize imports, and enforce 100-char line limits
-fmt:
+fmt: ## Format code, organize imports, and enforce 100-char line limits
 	goimports -w .
 	golines . -w --max-len=100
 	go mod tidy
 
-# Run golangci-lint to catch code quality issues
-lint: fmt
+lint: fmt ## Run golangci-lint to catch code quality issues
 	golangci-lint run ./...
 
-# Run all project tests with the race detector enabled
-test:
+test: ## Run all project tests with the race detector enabled
 	go test -v -race ./...
 
 # ==========================================
 # Infrastructure (Docker)
 # ==========================================
 
-# Spin up all infrastructure (Postgres, Kafka, NATS, OTel)
-up:
+up: ## Spin up all infrastructure (Postgres, Kafka, NATS, OTel)
 	docker-compose -f $(COMPOSE_FILE) up -d
 
-# Spin up a specific service (e.g., make up-kafka)
-up-%:
+up-%: ## Spin up a specific service (e.g., make up-kafka)
 	docker-compose -f $(COMPOSE_FILE) up -d $*
 
-# Shut down all infrastructure and remove networks
-down:
+down: ## Shut down all infrastructure and remove networks
 	docker-compose -f $(COMPOSE_FILE) down
 
-# Stop a specific service (e.g., make down-postgres)
-down-%:
+down-%: ## Stop a specific service (e.g., make down-postgres)
 	docker-compose -f $(COMPOSE_FILE) stop $*
 
-# Follow logs for all running containers
-logs:
+logs: ## Follow logs for all running containers
 	docker-compose -f $(COMPOSE_FILE) logs -f
 
-# Follow logs for a specific service (e.g., make logs-relay)
-logs-%:
+logs-%: ## Follow logs for a specific service (e.g., make logs-relay)
 	docker-compose -f $(COMPOSE_FILE) logs -f $*
 
-# Show status of all project containers
-ps:
+ps: ## Show status of all project containers
 	docker-compose -f $(COMPOSE_FILE) ps
 
 # ==========================================
 # Tooling Setup
 # ==========================================
 
-# Install required local development tools and git hooks
-setup:
+setup: ## Install required local development tools and git hooks
 	@echo "Installing tools and setting up pre-commit..."
 	brew install pre-commit || pip install pre-commit
 	pre-commit install
@@ -113,68 +101,49 @@ setup:
 # NATS Management
 # ==========================================
 
-# Create the JetStream stream and bind the subject pattern
-nats-setup:
+nats-setup: ## Create the JetStream stream and bind the subject pattern
 	@chmod +x scripts/nats/setup-stream.sh
 	./scripts/nats/setup-stream.sh $(NATS_URL) $(NATS_STREAM) "$(TOPIC_NAME)"
 
-# View a historical list of messages currently in the JetStream
-nats-view:
-	docker-compose -f $(COMPOSE_FILE) exec nats-box \
-		nats -s $(NATS_URL) stream view $(NATS_STREAM)
+nats-view: ## View messages currently in the JetStream
+	docker-compose -f $(COMPOSE_FILE) exec nats-box nats -s $(NATS_URL) stream view $(NATS_STREAM)
 
-# Show detailed metadata, sequence numbers, and consumer counts for the stream
-nats-info:
-	docker-compose -f $(COMPOSE_FILE) exec nats-box \
-		nats -s $(NATS_URL) stream info $(NATS_STREAM)
+nats-info: ## Show detailed metadata and sequence numbers for the stream
+	docker-compose -f $(COMPOSE_FILE) exec nats-box nats -s $(NATS_URL) stream info $(NATS_STREAM)
 
 # ==========================================
 # Kafka Management
 # ==========================================
 
-# Create the required Kafka topics with 3 partitions
-kafka-setup:
+kafka-setup: ## Create the required Kafka topics with 3 partitions
 	@chmod +x scripts/kafka/setup-topics.sh
 	./scripts/kafka/setup-topics.sh $(KAFKA_URL) $(TOPIC_NAME) 3
 
-# List all existing topics in the Kafka cluster
-kafka-list:
-	docker-compose -f $(COMPOSE_FILE) exec kafka \
-		/opt/kafka/bin/kafka-topics.sh --list --bootstrap-server $(KAFKA_URL)
+kafka-list: ## List all existing topics in the Kafka cluster
+	docker-compose -f $(COMPOSE_FILE) exec kafka /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server $(KAFKA_URL)
 
-# Deep dive into the configuration and partition status of the topic
-kafka-info:
+kafka-info: ## Deep dive into the configuration of the topic
 	docker-compose -f $(COMPOSE_FILE) exec kafka \
-		/opt/kafka/bin/kafka-topics.sh --describe \
-		--topic $(TOPIC_NAME) \
-		--bootstrap-server $(KAFKA_URL)
+	/opt/kafka/bin/kafka-topics.sh --describe \
+	--topic $(TOPIC_NAME) \
+	--bootstrap-server $(KAFKA_URL)
 
-# Tail messages from the beginning of the topic in real-time
-kafka-tail:
+kafka-tail: ## Tail messages from the beginning of the topic in real-time
 	docker-compose -f $(COMPOSE_FILE) exec kafka \
-		/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server $(KAFKA_URL) --topic $(TOPIC_NAME) --from-beginning
+	/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server $(KAFKA_URL) --topic $(TOPIC_NAME) --from-beginning
 
 # ==========================================
-# Observability
+# Observability & Database
 # ==========================================
 
-# Send a batch of test traces to the OTel Collector to verify the pipeline
-test-otel:
+test-otel: ## Send a batch of test traces to verify the OTel pipeline
 	@chmod +x scripts/otel/test-telemetry.sh
 	./scripts/otel/test-telemetry.sh $(OTEL_ENDPOINT) $(OTEL_TRACE_COUNT)
 
-
-# ==========================================
-# Database Management
-# ==========================================
-
-.PHONY: db-init
-# Automatically detects the STORAGE_TYPE and applies the correct schema
-db-init:
+db-init: ## Detects STORAGE_TYPE and applies the correct SQL schema
 	@echo "Initializing $(DB_TYPE) schema..."
 ifeq ($(DB_TYPE),postgres)
-	docker-compose -f $(COMPOSE_FILE) exec -T postgres \
-		psql -U postgres -d postgres < schema/postgres/openoutbox.sql
+	docker-compose -f $(COMPOSE_FILE) exec -T postgres psql -U postgres -d postgres < schema/postgres/openoutbox.sql
 else
 	@echo "Error: Unknown STORAGE_TYPE '$(DB_TYPE)'. Please check your .env"
 	@exit 1

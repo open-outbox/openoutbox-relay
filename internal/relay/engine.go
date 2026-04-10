@@ -105,25 +105,33 @@ func (e *Engine) Start(ctx context.Context) error {
 	})
 
 	g.Go(func() error {
-		ticker := time.NewTicker(e.interval)
-		defer ticker.Stop()
-
 		for {
 			select {
 			case <-gCtx.Done():
 				return gCtx.Err()
-			case <-ticker.C:
+			default:
 				count, err := e.process(gCtx)
 				if err != nil {
 					e.logIfError(err, "Batch processing failed")
-					time.Sleep(e.interval)
-					continue
+					// On error, wait before retrying to prevent log spam/CPU burn
+					select {
+					case <-gCtx.Done():
+						return gCtx.Err()
+					case <-time.After(e.interval):
+						continue
+					}
 				}
 
-				// High-throughput optimization: if the batch was full, don't wait for the ticker.
-				if count >= e.batchSize {
-					continue
+				// If the batch was empty, wait for the next interval
+				if count == 0 {
+					select {
+					case <-gCtx.Done():
+						return gCtx.Err()
+					case <-time.After(e.interval):
+						continue
+					}
 				}
+				// continue the loop immediately to "drain" the queue.
 			}
 		}
 	})

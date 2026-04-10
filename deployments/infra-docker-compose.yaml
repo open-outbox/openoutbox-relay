@@ -9,13 +9,6 @@ volumes:
   kafka_data: {}
 
 services:
-  relay:
-    build:
-      context: ..
-      dockerfile: deployments/Dockerfile
-    env_file:
-      - ../.env
-
   postgres:
     image: postgres:16
     restart: unless-stopped

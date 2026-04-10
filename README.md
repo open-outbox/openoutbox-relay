@@ -135,16 +135,6 @@ The OpenOutbox Relay is configured entirely via environment variables.
 | `OTEL_EXPORTER_OTLP_PROTOCOL`| Transport protocol | `grpc`, `http/protobuf` |
 | `OTEL_BSP_SCHEDULE_DELAY` | Interval between span exports | `5000ms` |
 
-### 6. Local Development & Testing
-
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `LOCAL_TEST_TOPIC` | Base name for publisher subjects/topics | `outbox.events.v1` |
-| `LOCAL_NATS_STREAM` | JetStream stream name for NATS mode | `OUTBOX_EVENTS` |
-| `LOCAL_OTEL_TEST_TRACE_COUNT`| Traces to simulate during `make test-otel` | `100` |
-| `LOCAL_PRODUCER_BATCH_SIZE` | Records per batch inserted by test producer | `10000` |
-| `LOCAL_PRODUCER_INTERVAL` | Interval between test batch insertions | `1s` |
-
 ## 📚 Documentation & Community
 
 Stay connected and help us improve the OpenOutbox ecosystem:

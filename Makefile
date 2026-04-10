@@ -6,7 +6,7 @@ endif
 
 # --- Configuration & Defaults ---
 BINARY_NAME         := openoutbox-relay
-COMPOSE_FILE        := deployments/docker-compose.yaml
+COMPOSE_FILE        := deployments/infra-docker-compose.yaml
 MAIN_PACKAGE        := ./cmd/relay/main.go
 PRODUCER_PKG        := ./cmd/producer/main.go
 KAFKA_URL           := kafka:9092
@@ -18,14 +18,12 @@ NATS_STREAM         := $(LOCAL_NATS_STREAM)
 OTEL_TRACE_COUNT    := $(LOCAL_OTEL_TEST_TRACE_COUNT)
 DB_TYPE             := $(STORAGE_TYPE)
 
-.PHONY: all build run producer test clean fmt lint up down setup help ps logs nats-setup nats-view nats-info kafka-setup kafka-list kafka-info kafka-tail test-otel db-init
+.PHONY: all build run produce test clean fmt lint up down setup help ps logs
 
 .DEFAULT_GOAL := help
 
 help: ## Display this help message
 	@grep -h -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
-
-all: setup fmt lint build ## Run the full development pipeline (setup, fmt, lint, build)
 
 # ==========================================
 # Development & Execution
@@ -34,7 +32,7 @@ all: setup fmt lint build ## Run the full development pipeline (setup, fmt, lint
 run: ## Run the Relay service locally using Go
 	go run $(MAIN_PACKAGE)
 
-producer: ## Run the Producer to generate dummy events for testing
+produce: ## Run the Producer to generate dummy events for testing
 	go run $(PRODUCER_PKG)
 
 build: ## Compile the Relay into a binary in the bin/ directory
@@ -44,6 +42,9 @@ build: ## Compile the Relay into a binary in the bin/ directory
 clean: ## Remove build binaries and clear Go test cache
 	rm -rf bin/
 	go clean -testcache
+
+docker-build: ## Builds the production-ready OCI container image.
+	docker build -f deployments/Dockerfile -t openoutbox-relay:v1.0 .
 
 # ==========================================
 # Quality & Linting

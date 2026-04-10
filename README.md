@@ -72,6 +72,14 @@ relay-cli prune --delivered-age 7d --dead-age 30d --dry-run
 relay-cli prune --delivered-age 7d --dead-age 30d
 ```
 
+## 🛡️ Reliability Guarantees
+
+The Relay is designed for **At-Least-Once Delivery**.
+
+* **No Data Loss:** Events are only marked as `DELIVERED` after the broker acknowledges receipt.
+* **Idempotency:** In rare edge cases (e.g., a crash immediately after publishing but before the
+DB update), the same event may be published twice. **Consumers must be idempotent.**
+
 ## ⚙️ Configuration
 
 The OpenOutbox Relay is configured entirely via environment variables.
@@ -80,7 +88,7 @@ The OpenOutbox Relay is configured entirely via environment variables.
 
 | Variable | Description | Options / Example | Default |
 | :--- | :--- | :--- | :--- |
-| `STORAGE_TYPE` | Database engine type | `postgres`, `mysql`,  | `postgres` |
+| `STORAGE_TYPE` | Database engine type | `postgres`, (`MySQL` support coming soon), | `postgres` |
 | `PUBLISHER_TYPE` | Target message broker | `nats`, `kafka`, `redis`, `stdout`, `null` | `stdout` |
 | `STORAGE_URL` | DB Connection string | `postgres://user:pass@host:5432/db` | — |
 | `PUBLISHER_URL` | Broker address | `localhost:9092` or `nats://localhost:4222` | `localhost:9092` |

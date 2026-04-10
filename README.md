@@ -1,28 +1,25 @@
-# OpenOutbox Relay
+# Open Outbox Relay
 
-**OpenOutbox Relay** is the official **reference implementation** of the [OpenOutbox Specification](https://github.com/open-outbox/openoutbox-spec).
+**OpenOutbox Relay** is the official reference implementation of the [Open Outbox Specification](https://github.com/open-outbox/openoutbox-spec).
 
-It is a high-performance, reliable implementation of the **Transactional Outbox Pattern**. It ensures `"at-least-once"` delivery of events from your database to message brokers like **Kafka** or **NATS**, solving the distributed transaction problem without complex 2PC protocols.
+It is a high-performance daemon designed for the **Transactional Outbox Pattern**. By bridging your database and message brokers like **Kafka** or **NATS**, it ensures `at-least-once` delivery, solving distributed consistency challenges without the complexity of 2PC or distributed transactions.
 
 ---
 
 ## ✨ Features
 
-* **At-Least-Once Delivery:** Guaranteed event propagation even if the broker or the relay itself crashes.
-* **Provider Agnostic:** Built-in support for **Apache Kafka** and **NATS JetStream**.
-* **Minimal configuration** Only specify your storage and broker and you're ready to run it.
-* **Self-Healing:** Automatically identifies and recovers "stuck" events from crashed workers via a configurable lease expiration policy.
-* **Observability:** Integrated with **OpenTelemetry** for distributed tracing and performance monitoring.
-* **Smart Retries:** Configurable backoff and retry logic for resilient message publishing
+* **Guaranteed Delivery:** `at-least-once` semantics ensure events are never lost, even during broker outages or relay crashes.
+* **Database-Native Scaling:** Leverages database-native locking (like Postgres `SKIP LOCKED`) where available to support horizontal scaling without double-processing.
+* **Self-Healing:** Built-in **Lease Reaper** automatically identifies and recovers "stuck" events from crashed worker instances.
+* **Smart Retries:** Exponential backoff with jitter to prevent "thundering herd" issues during downstream outages.
+* **Observability:** Native **OpenTelemetry** integration for distributed tracing and Prometheus metrics.
+* **Provider Agnostic:** Pluggable storage (Postgres) and publishers (Kafka, NATS JetStream, Redis).
 
-## 📈 Scalability & Performance
+## 📊 Performance at Scale
 
-The Relay is built for high-throughput environments where performance is critical:
-
-* **High-Concurrency Locking:** Uses `SELECT ... FOR UPDATE SKIP LOCKED` to allow multiple Relay instances to work on the same database table simultaneously without contention or double-processing.
-* **Horizontal Scalability:** You can scale the Relay horizontally by simply spinning up more containers; the locking mechanism ensures they naturally load-balance the event workload.
-* **Optimized Batching:** Processes events in configurable batches (default 100) to minimize database round-trips and maximize Kafka/NATS throughput.
-* **Low Latency:** Written in Go with a focus on non-blocking I/O and minimal memory overhead, ensuring sub-millisecond overhead between the database and the broker.
+* **Non-Blocking I/O:** Written in Go with a focus on zero-allocation paths in the event loop.
+* **Drain Mode:** Automatically shifts from interval-based polling to high-speed "drain mode" during traffic bursts.
+* **Resource Efficient:** Designed to run as a sidecar or a standalone microservice with a minimal memory footprint.
 
 ---
 
@@ -30,18 +27,16 @@ The Relay is built for high-throughput environments where performance is critica
 
 ### 1. Database Schema
 
-The Relay expects an `outbox_events` table following the [OpenOutbox Standard](https://github.com/open-outbox/openoutbox-spec). You can find the DDLs for this table in
-[schema/postgres/openoutbox.sql](./schema/postgres/openoutbox.sql)
+The Relay requires an `outbox_events` table. Run the standard DDL found in:
+[`schema/postgres/openoutbox.sql`](./schema/postgres/openoutbox.sql)
 
 ### 2. Run with Docker
-
 ```bash
 docker run -d \
   --name openoutbox-relay \
-  -e STORAGE_TYPE="postgres" \
-  -e STORAGE_URL="STORAGE_URL=postgres://postgres:postgres@localhost:5432/postgres" \
+  -e STORAGE_URL="postgres://user:pass@localhost:5432/db" \
   -e PUBLISHER_TYPE="kafka" \
-  -e KAFKA_BROKERS="kafka://localhost:9092" \
+  -e KAFKA_BROKERS="localhost:9092" \
   openoutbox/relay:latest
 ```
 
@@ -62,14 +57,12 @@ services:
     restart: always
 ```
 
-Apologies for the oversight. Here is the full configuration section in raw Markdown format, ready to be pasted into your README.md.
-
-Markdown
 ## ⚙️ Configuration
 
 The OpenOutbox Relay is configured entirely via environment variables.
 
 ### 1. Core Infrastructure & Connectivity
+
 | Variable | Description | Options / Example | Default |
 | :--- | :--- | :--- | :--- |
 | `STORAGE_TYPE` | Database engine type | `postgres`, `mysql`,  | `postgres` |
@@ -90,6 +83,7 @@ The OpenOutbox Relay is configured entirely via environment variables.
 | `SERVER_PORT` | HTTP Server for health checks and metrics | `:9000` |
 
 ### 3. Reliability & Backoff
+
 | Variable | Description | Default |
 | :--- | :--- | :--- |
 | `RETRY_MAX_ATTEMPTS` | Max attempts before an event is marked `DEAD` | `25` |
@@ -98,6 +92,7 @@ The OpenOutbox Relay is configured entirely via environment variables.
 | `RETRY_JITTER` | Randomness factor (0.15 = 15% jitter) | `0.15` |
 
 ### 4. Kafka Specific Tuning
+
 | Variable | Description | Default |
 | :--- | :--- | :--- |
 | `KAFKA_BATCH_SIZE` | **Critical:** Set to `1` to bypass client-side double-batching | `1` |
@@ -108,6 +103,7 @@ The OpenOutbox Relay is configured entirely via environment variables.
 | `KAFKA_WRITE_TIMEOUT` | Timeout for writing to the broker | `10s` |
 
 ### 5. Observability (OpenTelemetry)
+
 | Variable | Description | Example |
 | :--- | :--- | :--- |
 | `OTEL_TRACES_EXPORTER` | Destination for trace data | `otlp`, `console`, `none` |
@@ -117,6 +113,7 @@ The OpenOutbox Relay is configured entirely via environment variables.
 | `OTEL_BSP_SCHEDULE_DELAY` | Interval between span exports | `5000ms` |
 
 ### 6. Local Development & Testing
+
 | Variable | Description | Default |
 | :--- | :--- | :--- |
 | `LOCAL_TEST_TOPIC` | Base name for publisher subjects/topics | `outbox.events.v1` |

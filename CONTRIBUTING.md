@@ -2,6 +2,8 @@
 
 First off, thank you for considering contributing! It’s people like you who make OpenOutbox a reliable standard for everyone.
 
+We love contributions! If you want to help, please check our [**Roadmap**](./ROADMAP.md) to see our prioritized features and "help wanted" areas.
+
 ## Local Development Setup
 
 Before starting development make sure you have the following setup.

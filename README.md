@@ -148,7 +148,19 @@ Stay connected and help us improve the OpenOutbox ecosystem:
 * **[Contribution Guide](./CONTRIBUTING.md)**: Ready to help? Check out our guide on setting up your local environment, running tests with the `Makefile`, and our pull request process.
 * **[Changelog](./CHANGELOG.md)**: View a detailed list of changes, improvements, and bug fixes for every release.
 * **[OpenOutbox Specification](https://github.com/open-outbox/openoutbox-spec)**: Learn more about the standard this relay implements.
-* **[Architecture Deep Dive](./docs/architecture.md)**: A technical look at the internal locking mechanisms and event lifecycle management.
+
+---
+
+## Project Status & Roadmap
+
+OpenOutbox is currently in **Alpha** (`v0.1.x`). We are actively working on scaling the Relay and adding more producer drivers.
+
+Check out our [**Project Roadmap**](./ROADMAP.md) to see what's coming next, including:
+
+* Support for MySQL datavase
+* Adding new broker support
+* Dashboard for event monitoring
+* Ordering support
 
 ---
 

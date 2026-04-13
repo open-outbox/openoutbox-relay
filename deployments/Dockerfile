@@ -20,8 +20,8 @@ COPY . .
 # 3. Build the binary
 # We still use CGO_ENABLED=0 for maximum portability,
 # but it will link perfectly against Debian's libraries if needed.
-RUN CGO_ENABLED=0 $TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o relay ./cmd/relay/main.go
-RUN CGO_ENABLED=0 $TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o cli ./cmd/cli
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o relay ./cmd/relay/main.go
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o cli ./cmd/cli
 
 # --- Stage 2: Final Runtime ---
 # Using Debian Slim for the production environment

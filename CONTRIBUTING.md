@@ -18,26 +18,33 @@ Before starting development make sure you have the following setup.
 
 The easiest way to see the Relay in action is to use the provided local stack.
 
-1. Spin up the storage using docker compose and create `outbox_events` table:
+1. Clone the repository
+
+    ```bash
+    git clone https://github.com/open-outbox/relay.git
+    cd relay
+    ```
+
+2. Spin up the storage using docker compose and create `outbox_events` table:
 
     ```bash
     make up-postgres
     make db-init
     ```
 
-2. Create the required .env file for the relay
+3. Create the required .env file for the relay
 
     ```bash
     cp .env.example .env
     ```
 
-3. Run the Relay in development mode:
+4. Run the Relay in development mode:
 
     ```bash
     make run
     ```
 
-4. Produce test events (use another terminal window):
+5. Produce test events (use another terminal window):
 
     ```bash
     make produce

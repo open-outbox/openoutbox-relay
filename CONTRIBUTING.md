@@ -203,6 +203,7 @@ These commands help with local development and testing.
 | `make build` | Compile the Relay and CLI into binaries in the `./bin` directory. |
 | `make clean` | Remove build binaries and clear Go test cache. |
 | `make docker-build` | Builds the production-ready OCI container image. |
+| `make docs-dev` | Runs the documentation in develoopment mode. |
 
 ### Tooling Setup
 

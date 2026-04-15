@@ -1,0 +1,61 @@
+/* 1. Target the 'Edit Page' link */
+.sl-flex.footer-actions a[href*="edit"],
+footer a[href*="edit"] {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 0.5rem;
+
+    /* Hide the original Starlight text */
+    font-size: 0 !important;
+
+    /* Clean, Minimal Styling */
+    padding: 0.5rem 1rem !important;
+    background-color: transparent !important;
+    color: var(--sl-color-gray-3) !important;
+    border: 1px solid var(--sl-color-gray-5) !important;
+    border-radius: 0.4rem !important;
+    text-decoration: none !important;
+    transition: all 0.2s ease;
+    margin: 1rem 0;
+}
+
+/* 2. Inject the NEW text */
+.sl-flex.footer-actions a[href*="edit"]::after,
+footer a[href*="edit"]::after {
+    content: "Edit this page on GitHub";
+    font-size: var(--sl-text-xs) !important; /* Restore font size for new text */
+    font-weight: 500 !important;
+}
+
+/* 3. Minimalist Icon */
+.sl-flex.footer-actions a[href*="edit"]::before,
+footer a[href*="edit"]::before {
+    content: "📝";
+    font-size: 0.9rem;
+    filter: grayscale(100%);
+    opacity: 0.7;
+}
+
+/* 4. Hover State */
+.sl-flex.footer-actions a[href*="edit"]:hover,
+footer a[href*="edit"]:hover {
+    background-color: var(--sl-color-gray-6) !important;
+    color: var(--sl-color-white) !important;
+    border-color: var(--sl-color-gray-3) !important;
+}
+
+/* 5. Hide the default SVG icon */
+.sl-flex.footer-actions a[href*="edit"] svg,
+footer a[href*="edit"] svg {
+    display: none !important;
+}
+
+/* Hide the 'Overview' link in the Table of Contents */
+.right-sidebar a[href="#_top"] {
+    display: none !important;
+}
+
+/* Optional: If there's a gap left behind, you can adjust the list padding */
+.right-sidebar ul {
+    padding-top: 0;
+}

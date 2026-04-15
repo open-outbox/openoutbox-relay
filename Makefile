@@ -20,7 +20,7 @@ NATS_STREAM         := $(LOCAL_NATS_STREAM)
 OTEL_TRACE_COUNT    := $(LOCAL_OTEL_TEST_TRACE_COUNT)
 DB_TYPE             := $(STORAGE_TYPE)
 
-.PHONY: all build run produce test clean fmt lint up down setup help ps logs
+.PHONY: all build run produce test clean fmt lint up down setup help ps logs docs-dev
 
 .DEFAULT_GOAL := help
 
@@ -48,6 +48,9 @@ clean: ## Remove build binaries and clear Go test cache
 
 docker-build: ## Builds the production-ready OCI container image.
 	docker build -f deployments/Dockerfile -t openoutbox-relay:v1.0 .
+
+docs-dev: ## Runs the documentation website in dev mode.
+	cd docs && npm install && npm run dev
 
 # ==========================================
 # Quality & Linting

@@ -3,7 +3,8 @@ title: Open Outbox
 description: The open-source standard for reliable message delivery in distributed systems.
 template: splash
 hero:
-  tagline: The open-source standard for reliable message delivery.
+  title: Open Outbox
+  tagline: Atomic event delivery for distributed systems. Standardized, high&#8209;performance, and database-native.
   image:
     file: ../../assets/logo.svg
   actions:
@@ -11,9 +12,9 @@ hero:
       link: /relay/quick-start/
       icon: right-arrow
       variant: primary
-    - text: View the Specification
-      link: /spec/
-      icon: document
+    - text: Explore the Architecture
+      link: /reference/api/internal/relay/
+      icon: rocket
       variant: secondary
 ---
 
@@ -22,24 +23,98 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 ## Engineering Reliability at Scale
 
 <CardGrid stagger>
-	<Card title="The Open Specification" icon="document">
-		A language-agnostic protocol for the Outbox pattern. Whether you use **Python, Java, or Rust**, Open Outbox defines a standard for event state and claiming logic to ensure total consistency across any stack.
-	</Card>
 	<Card title="High-Performance Relay" icon="rocket">
-		A specialized infrastructure component optimized for extreme query efficiency. It ensures **at-least-once delivery** by bridging your database and message brokers with atomic transactional integrity.
+		A specialized infrastructure component optimized for extreme query efficiency.
+    It ensures **at-least-once delivery** by bridging your database and message
+    brokers with atomic transactional integrity.
 	</Card>
 	<Card title="Database-Native Scaling" icon="setting">
-    Engineered for massive datasets. The architecture is optimized for **constant-time query performance**, allowing multiple relay instances to coordinate and scale horizontally without collisions—even on tables with millions of records.
-  </Card>
+		Engineered for massive datasets. Optimized for **constant-time query performance**,
+    allowing multiple relay instances to scale horizontally without collisions—even on
+    tables with millions of records.
+	</Card>
 	<Card title="Universal Egress" icon="external">
-    Ready for any infrastructure. The relay features pluggable publishers for **Kafka, NATS, Redis, and RabbitMQ**, with a modular architecture that makes it easy to implement and plug in new publishers as needed.
-  </Card>
+		Ready for any infrastructure. Features pluggable publishers for **Kafka, NATS, Redis,
+    and RabbitMQ**, with a modular architecture to plug in new drivers in minutes.
+	</Card>
 	<Card title="Enterprise Observability" icon="approve-check">
-		Built for modern operations. Native **OpenTelemetry** integration provides deep visibility into event latency and pipeline health, making it ready for complex, distributed environments.
+		Built for modern operations. Native **OpenTelemetry** integration provides deep visibility
+     into event latency and pipeline health for complex, distributed environments.
+	</Card>
+	<Card title="The Open Specification" icon="document">
+		*Currently in Development.* A language-agnostic protocol for the Outbox pattern,
+    defining a standard for event state and claiming logic to ensure total
+    consistency across any stack.
 	</Card>
 </CardGrid>
 
 ---
+
+## How it Works
+
+Open Outbox Relay sits between your application database and your message
+infrastructure, acting as a highly-efficient bridge.
+
+import { Steps } from '@astrojs/starlight/components';
+
+<Steps>
+
+1. **Atomic Claiming** The Relay identifies pending events using a non-blocking
+"claim-and-lock" strategy. This ensures that even with multiple Relay instances
+running, each event is claimed by exactly one worker with zero contention,
+regardless of your chosen storage engine.
+
+2. **Parallel Dispatch** Claimed batches are handed off to the **Publishers**.
+Whether you are using Kafka, NATS, or Redis, the Relay handles the "plumbing" of
+connection pooling, batching, and concurrent delivery.
+
+3. **Acknowledgement & Cleanup** The Relay waits for a "Success" signal from your
+message broker. Only once delivery is confirmed does it update the event state to
+`DELIVERED`, completing the atomic bridge between your database and your stream.
+
+4. **Self-Healing (Lease Management)** If a worker crashes mid-delivery, the ownership
+lease expires automatically. Another Relay instance will transparently pick up the
+abandoned event, guaranteeing **at-least-once delivery** without manual intervention.
+
+</Steps>
+
+:::note[Performance Insight]
+By offloading the delivery logic to the Relay, your main application remains
+"thin" and fast, only needing to perform a local database `INSERT` to trigger a global event.
+:::
+
+---
+
+---
+## Why Open Outbox?
+
+Don't reinvent the wheel. Most custom outbox implementations fail when they hit high concurrency or partial network failures.
+
+| Feature | Homegrown Scripts | Open Outbox Relay |
+| :--- | :--- | :--- |
+| **Concurrency** | Row-level locking / Deadlocks | Non-blocking atomic claims |
+| **Scaling** | Single-instance bottlenecks | Multi-node horizontal scaling |
+| **Delivery** | Best-effort | Guaranteed at-least-once |
+| **Observability** | Basic logs | Native OpenTelemetry & Metrics |
+| **Retries** | Hardcoded logic | Intelligent backoff state-machine |
+
+---
+
+## Pluggable Ecosystem
+
+Open Outbox is designed to fit your existing infrastructure, not force you into a new one.
+
+<CardGrid>
+  <Card title="Databases" icon="setting">
+    Compatible with **PostgreSQL, MySQL, and MariaDB**. If it supports standard SQL transactions, it supports Open Outbox.
+  </Card>
+  <Card title="Message Brokers" icon="external">
+    Native drivers for **Kafka, NATS, and Redis Streams**. Modular architecture allows for custom driver injection.
+  </Card>
+</CardGrid>
+
+---
+
 ## Performance by Design
 
 Open Outbox is engineered for predictability and minimal overhead. In our reference benchmarks:

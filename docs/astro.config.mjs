@@ -34,12 +34,13 @@ export default defineConfig({
                 },
                 {
                     label: 'Reference',
+                    collapsed: true,
                     items: [
                         { label: 'Configuration', link: '/reference/config' },
                         {
                             label: 'API Reference',
-                            // This will pick up index.md (the FileTree) and all sub-pages
-                            autogenerate: { directory: 'reference/api' },
+                            collapsed: true,
+                            autogenerate: { directory: 'reference/api',},
                         },
                     ],
                 },

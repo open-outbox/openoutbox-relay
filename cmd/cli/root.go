@@ -34,6 +34,7 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+// Executes the requested cli command using Cobra
 func Execute(ctx context.Context) error {
 	return rootCmd.ExecuteContext(ctx)
 }

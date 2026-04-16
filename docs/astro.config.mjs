@@ -2,32 +2,49 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
-
-// https://astro.build/config
 export default defineConfig({
-	site: 'https://open-outbox.dev',
-  	base: '/',
-	integrations: [
-		starlight({
-			title: 'Open Outbox',
-			customCss: ['./src/styles/custom.css'],
-			social: [
-				{ icon: 'github', label: 'GitHub', href: 'https://github.com/open-outbox/relay' },
-				{ icon: 'discord', label: 'Discord', href: 'https://discord.gg/Tk3jwfm7' }
-			],
-			sidebar: [
-				{ label: 'Home', link: '/' },
-  				{ label: 'Benchmarks', link: '/benchmarks/' },
-				{
-					label: 'Specification',
-					autogenerate: { directory: 'spec' },
-				},
-				{
-					label: 'Reference Implementation',
-					autogenerate: { directory: 'relay' },
-				},
-				{ label: 'Contribute', link: '/contribute/' },
-			],
-		}),
-	],
+    site: 'https://open-outbox.dev',
+    base: '/',
+    integrations: [
+        starlight({
+            title: 'Open Outbox',
+            customCss: ['./src/styles/custom.css'],
+            logo: {
+                alt: 'Open Outbox Logo',
+                src: './src/assets/logo.svg',
+            },
+            social: [
+                { icon: 'github', label: 'GitHub', href: 'https://github.com/open-outbox/relay' },
+                { icon: 'discord', label: 'Discord', href: 'https://discord.gg/Tk3jwfm7' }
+            ],
+            editLink: {
+                baseUrl: 'https://github.com/open-outbox/relay/edit/main/docs/',
+            },
+            sidebar: [
+                {
+                    label: 'Getting Started',
+                    items: [
+                        { label: 'Introduction', link: '/' },
+                        { label: 'Quick Start', link: '/relay/quick-start' },
+                    ],
+                },
+                {
+                    label: 'Guides',
+                    autogenerate: { directory: 'guides' },
+                },
+                {
+                    label: 'Reference',
+                    items: [
+                        { label: 'Configuration', link: '/reference/config' },
+                        { label: 'API Reference', link: '/reference/api' }, // Your gomarkdoc output
+                    ],
+                },
+                {
+                    label: 'Architecture & Spec',
+                    collapsed: true,
+                    autogenerate: { directory: 'spec' },
+                },
+            ],
+        }),
+    ],
 });

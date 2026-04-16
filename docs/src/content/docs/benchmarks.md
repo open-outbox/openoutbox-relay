@@ -1,8 +1,8 @@
 ---
 title: Benchmarks
-description: Benchmarks of the open outbox relay
+description: Performance results and load testing data.
 ---
 
-Welcome to the **Open Outbox Benchmark**. This document defines how events should be stored, claimed, and delivered.
+# Benchmarks
 
-[Edit this page on GitHub](https://github.com/open-outbox/spec)
+Edit this file to add content for Benchmarks.

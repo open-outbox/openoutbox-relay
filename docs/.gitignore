@@ -19,3 +19,8 @@ pnpm-debug.log*
 
 # macOS-specific files
 .DS_Store
+
+# Generated API documentation
+src/content/docs/reference/api/pkg/
+src/content/docs/reference/api/internal/
+src/content/docs/reference/api/cmd/

@@ -5,6 +5,9 @@ on:
     branches: [ main ]
     paths:
       - "docs/**"
+      - "pkg/**"
+      - "internal/**"
+      - "main.go"
   workflow_dispatch:
 
 permissions:
@@ -18,9 +21,24 @@ jobs:
     defaults:
       run:
         working-directory: docs
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache-dependency-path: go.sum
+
+      - name: Install gomarkdoc
+        run: go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
+        working-directory: .
+
+      - name: Generate API Docs
+        run: make gen-api
+        working-directory: .
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -29,7 +47,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: docs/package-lock.json
 
-      - name: Install dependencies
+      - name: Install npm dependencies
         run: npm install
 
       - name: Build with Astro

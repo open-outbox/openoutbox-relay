@@ -52,6 +52,14 @@ docker-build: ## Builds the production-ready OCI container image.
 docs-dev: ## Runs the documentation website in dev mode.
 	cd docs && npm install && npm run dev
 
+gen-api:
+	gomarkdoc \
+  		--template-file file=docs/starlight-file.gotxt \
+  		--template-file package=docs/starlight-package.gotxt \
+  		--output 'docs/src/content/docs/reference/api/{{.ImportPath}}.md' \
+  		./...
+
+
 # ==========================================
 # Quality & Linting
 # ==========================================
@@ -103,6 +111,7 @@ setup: ## Install required local development tools and git hooks
 	go install golang.org/x/tools/cmd/goimports@latest
 	go install github.com/segmentio/golines@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
 
 # ==========================================
 # NATS Management

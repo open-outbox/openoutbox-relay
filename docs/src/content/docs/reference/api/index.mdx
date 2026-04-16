@@ -1,0 +1,22 @@
+---
+title: API Reference
+description: Technical documentation for the Open Outbox Relay packages.
+---
+
+import { FileTree } from '@astrojs/starlight/components';
+
+
+To understand how the Relay works under the hood, you can explore the documentation for each package. The project is organized into modular components:
+
+<FileTree>
+- pkg/
+  - **publisher/**: Interface and implementations for Kafka, NATS, etc.
+  - **cursor/**: Logic for tracking database position and claiming events.
+- internal/
+  - **engine/**: The core orchestration loop.
+  - **metrics/**: OpenTelemetry and Prometheus integration.
+- main.go: The entry point of the application.
+</FileTree>
+
+### Package Documentation
+Select a package from the sidebar to view its detailed GoDoc reference, including function signatures, types, and examples.

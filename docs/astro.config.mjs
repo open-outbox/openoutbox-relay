@@ -36,7 +36,11 @@ export default defineConfig({
                     label: 'Reference',
                     items: [
                         { label: 'Configuration', link: '/reference/config' },
-                        { label: 'API Reference', link: '/reference/api' }, // Your gomarkdoc output
+                        {
+                            label: 'API Reference',
+                            // This will pick up index.md (the FileTree) and all sub-pages
+                            autogenerate: { directory: 'reference/api' },
+                        },
                     ],
                 },
                 {

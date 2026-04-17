@@ -43,7 +43,12 @@ func (s *Stdout) Publish(_ context.Context, event relay.Event) error {
 	return nil
 }
 
-// Close does nothing
+// Close does nothing on the Stdout publisher
 func (s *Stdout) Close() error {
+	return nil
+}
+
+// Ping does nothing on the Stdout publisher
+func (s *Stdout) Ping(ctx context.Context) error {
 	return nil
 }

@@ -173,6 +173,27 @@ func (k *Kafka) Close() error {
 	return nil
 }
 
+// Ping verifies the connectivity to the Kafka brokers by attempting to
+// fetch metadata or checking the underlying connection state.
+func (k *Kafka) Ping(ctx context.Context) error {
+	if k.writer == nil {
+		return fmt.Errorf("kafka writer not initialized")
+	}
+
+	conn, err := kafka.DialContext(ctx, k.writer.Addr.Network(), k.writer.Addr.String())
+	if err != nil {
+		return fmt.Errorf("failed to dial kafka broker: %w", err)
+	}
+	defer conn.Close()
+
+	_, err = conn.Controller()
+	if err != nil {
+		return fmt.Errorf("failed to fetch kafka controller: %w", err)
+	}
+
+	return nil
+}
+
 // isKafkaErrorRetryable classifies Kafka-specific errors to determine
 // if the relay should attempt to republish the message.
 // It considers network timeouts, connection issues, and temporary

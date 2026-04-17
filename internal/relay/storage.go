@@ -45,6 +45,10 @@ type Storage interface {
 	// Close releases any resources held by the storage implementation, such as
 	// database connection pools.
 	Close() error
+
+	// Ping verifies the connectivity to the underlying database. It should
+	// return an error if the storage backend is unreachable or misconfigured.
+	Ping(ctx context.Context) error
 }
 
 // Stats represents a snapshot of the outbox table's current state.

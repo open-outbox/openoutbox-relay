@@ -133,3 +133,18 @@ func (r *Redis) Close() error {
 
 	return nil
 }
+
+// Ping verifies the connectivity to the Redis server. It ensures the
+// client can communicate with the storage backend and that the
+// connection pool is healthy.
+func (r *Redis) Ping(ctx context.Context) error {
+	if r.client == nil {
+		return fmt.Errorf("redis client not initialized")
+	}
+
+	if err := r.client.Ping(ctx).Err(); err != nil {
+		return fmt.Errorf("redis ping failed: %w", err)
+	}
+
+	return nil
+}

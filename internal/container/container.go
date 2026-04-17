@@ -135,8 +135,8 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 			return relay.NewEngine(s, instrumentedPublisher, params, tel)
 		},
 		// Server provider: provides the HTTP server used for health checks and Prometheus metrics.
-		func(ctx context.Context, s relay.Storage, cfg *config.Config, logger *zap.Logger) *relay.Server {
-			return relay.NewServer(ctx, s, cfg.ServerPort, logger)
+		func(ctx context.Context, s relay.Storage, p relay.Publisher, cfg *config.Config, logger *zap.Logger) *relay.Server {
+			return relay.NewServer(ctx, s, p, cfg.ServerPort, logger)
 		},
 	}
 

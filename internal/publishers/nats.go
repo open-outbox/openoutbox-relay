@@ -103,6 +103,24 @@ func (n *Nats) Close() error {
 	return nil
 }
 
+// Ping verifies the connectivity to the NATS server. It checks if the
+// underlying connection is active and capable of communicating with
+// the NATS cluster.
+func (n *Nats) Ping(ctx context.Context) error {
+	if n.conn == nil || !n.conn.IsConnected() {
+		return fmt.Errorf("nats connection is not active")
+	}
+
+	// For a more robust check, we ensure the connection isn't currently
+	// in a reconnecting or closed state.
+	status := n.conn.Status()
+	if status != nats.CONNECTED {
+		return fmt.Errorf("nats connection status is %s", status.String())
+	}
+
+	return nil
+}
+
 // isNatsErrorRetryable evaluates whether a NATS error should trigger a retry attempt.
 // It considers network timeouts and connection issues as retryable, while marking
 // permanent failures like authorization errors, invalid subjects, or payload

@@ -311,6 +311,21 @@ func (p *Postgres) Prune(ctx context.Context, opts relay.PruneOptions) (relay.Pr
 // Close gracefully shuts down the underlying pgx connection pool.
 func (p *Postgres) Close() error { p.pool.Close(); return nil }
 
+// Ping checks the health of the Postgres connection pool. It ensures
+// that the database is reachable and accepting commands. This is
+// used primarily by the health check endpoint for liveness probes.
+func (p *Postgres) Ping(ctx context.Context) error {
+	if p.pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	if err := p.pool.Ping(ctx); err != nil {
+		return fmt.Errorf("postgres ping failed: %w", err)
+	}
+
+	return nil
+}
+
 func (p *Postgres) countPotentialDeletes(
 	ctx context.Context,
 	deliveredInterval, deadInterval string,

@@ -37,6 +37,7 @@ export default defineConfig({
                     collapsed: true,
                     items: [
                         { label: 'Configuration', link: '/reference/configuration' },
+                        { label: 'Diagnostics & Metrics', link: '/reference/diagnostics' },
                         {
                             label: 'API Reference',
                             collapsed: true,

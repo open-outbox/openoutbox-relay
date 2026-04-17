@@ -1,0 +1,131 @@
+---
+title: Diagnostics & Metrics
+description: Reference guide for Open Outbox Telemetry, health endpoints, and metrics.
+---
+import { Aside } from '@astrojs/starlight/components';
+import { Badge } from '@astrojs/starlight/components';
+
+## Health Endpoints
+
+The Relay provides a built-in HTTP server (configured via [`SERVER_PORT`](./configuration/#server_port)) for infrastructure orchestration and monitoring.
+
+---
+
+### `GET /healthz` (Liveness)
+
+**Purpose**: Confirms the Relay process is running.
+
+Returns `200 OK` if the Relay process is running and the internal engine loops are active.
+This is the primary endpoint for orchestrator `liveness` probes.
+
+---
+
+### `GET /readyz` (Readiness)
+
+**Purpose**: Confirms the Relay is ready to process events.
+
+Returns `200 OK` if the Relay can successfully communicate with both the Storage and the
+Publisher. If either dependency is unreachable, it returns `503 Service Unavailable`.
+
+This allows the Relay to stay alive and retry connections during an outage without
+being restarted by the orchestrator. This is the primary endpoint for orchestrator `readiness` probes
+
+---
+
+### `GET /stats` (Manual stats check)
+
+**Purpose**: Manual inspection and JSON-based health monitoring.
+
+Returns a JSON snapshot of the current outbox state, including:
+
+- **Lag**: The age of the oldest pending event.
+- **Volume**: The total count of pending events.
+
+---
+
+## Observability
+
+The Relay is natively instrumented with [OpenTelemetry (OTel)](http://opentelemetry.io/)
+for vendor-neutral metrics and tracing.
+
+### Metrics Exporting
+
+To maintain a zero-dependency footprint, the Relay does not serve a local metrics endpoint.
+It follows the push-based [OTLP (OpenTelemetry Line Protocol)](https://opentelemetry.io/docs/specs/otlp/)
+standard:
+
+- **Configuration**: Set `OTEL_METRICS_EXPORTER`=`otlp` via environment variables.
+- **Connectivity**: Configure `OTEL_EXPORTER_OTLP_ENDPOINT` to point to your observability
+backend or an [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/).
+
+<Aside type="tip" title="Flexibility">
+This design decision allows you to switch between
+different monitoring providers (e.g., Datadog, Honeycomb, or self-hosted
+collectors) simply by changing environment variables without modifying the Relay binary.
+</Aside>
+
+---
+
+## Metrics Reference
+
+The Relay exposes standard OpenTelemetry metrics to monitor the health, throughput, and lag of your outbox pipeline.
+
+### `openoutbox.events.batch_size`
+
+<Badge text="Histogram" variant="note" /> <Badge text="{event}" variant="tip" />
+
+Tracks the number of events fetched from the database in a single claim operation. This helps monitor if the relay is keeping up with the ingestion rate.
+
+---
+
+### `openoutbox.events.total`
+
+<Badge text="Counter" variant="note" /> <Badge text="{event}" variant="tip" />
+
+Tracks the total number of events processed.
+* **Attributes:** `status` (success/failed), `type` (event type).
+
+---
+
+### `openoutbox.events.e2e_latency`
+
+<Badge text="Histogram" variant="note" /> <Badge text="seconds" variant="tip" />
+
+Measures the total time elapsed from the moment an event was created in the database until it was successfully acknowledged by the message broker.
+* **Attributes:** `type` (event type).
+
+---
+
+### `openoutbox.storage.latency`
+
+<Badge text="Histogram" variant="note" /> <Badge text="seconds" variant="tip" />
+
+Measures the duration of individual database operations.
+* **Attributes:** `op` (e.g., `claim`, `mark_delivered`, `mark_failed`).
+
+---
+
+### `openoutbox.publisher.latency`
+
+<Badge text="Histogram" variant="note" /> <Badge text="seconds" variant="tip" />
+
+Measures how long it takes to publish a message to the broker.
+* **Attributes:** `status` (success/failed), `type` (event type).
+
+---
+
+### `openoutbox.backlog.pending_count`
+
+<Badge text="Gauge" variant="note" /> <Badge text="{event}" variant="tip" />
+
+Represents the current number of events sitting in the outbox table with a `PENDING` status.
+
+---
+
+### `openoutbox.backlog.oldest_age_seconds`
+
+<Badge text="Gauge" variant="note" /> <Badge text="seconds" variant="tip" />
+
+Tracks the age of the oldest pending event in the queue, providing a direct measurement of "lag."
+
+---

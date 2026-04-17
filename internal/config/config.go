@@ -6,7 +6,9 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"reflect"
 	"time"
 
 	"github.com/spf13/viper"
@@ -199,9 +201,10 @@ func Load() (*Config, error) {
 	v.SetDefault("KAFKA_REQUIRED_ACKS", "all")
 	v.SetDefault("KAFKA_ASYNC", false)
 
-	// AutomaticEnv allows OS environment variables to override any file settings.
-	// This is the core of the Twelve-Factor App methodology.
-	v.AutomaticEnv()
+	// Bind all struct tags to Viper's internal registry
+	if err := bindEnvs(v, Config{}); err != nil {
+		return nil, fmt.Errorf("failed to bind env vars: %w", err)
+	}
 
 	// Loading Optional Local Configuration from .env
 	v.SetConfigFile(".env")
@@ -220,6 +223,10 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// AutomaticEnv allows OS environment variables to override any file settings.
+	// This is the core of the Twelve-Factor App methodology.
+	v.AutomaticEnv()
+
 	// Unmarshal processes the raw Viper data into the typed Config struct,
 	// automatically parsing durations and integers.
 	var cfg Config
@@ -228,4 +235,22 @@ func Load() (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// bindEnvs tells Viper to look for environment variables for every
+// field defined in the Config struct.
+func bindEnvs(v *viper.Viper, iface interface{}) error {
+	ifaceVal := reflect.ValueOf(iface)
+	ifaceType := ifaceVal.Type()
+
+	for i := 0; i < ifaceType.NumField(); i++ {
+		field := ifaceType.Field(i)
+		tag := field.Tag.Get("mapstructure")
+		if tag != "" {
+			if err := v.BindEnv(tag); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

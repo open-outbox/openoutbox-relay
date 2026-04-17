@@ -1,49 +1,37 @@
 # --- Stage 1: Build ---
-# Using the official Go image (which is Debian-based)
 FROM --platform=$BUILDPLATFORM golang:1.26.1-bookworm AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
 
-# Install CA certificates for secure connections (NATS/Postgres TLS)
-RUN apt-get update && apt-get install -y ca-certificates --no-install-recommends
-
 WORKDIR /app
 
-# 1. Copy dependency files to leverage Docker layer caching
+# Leverage Docker layer caching for dependencies
 COPY go.mod go.sum ./
 RUN go mod download
 
-# 2. Copy the rest of the source code
+# Copy source and build static binaries
 COPY . .
-
-# 3. Build the binary
-# We still use CGO_ENABLED=0 for maximum portability,
-# but it will link perfectly against Debian's libraries if needed.
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o relay ./cmd/relay/main.go
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o cli ./cmd/cli
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o relay ./cmd/relay/main.go && \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o cli ./cmd/cli
 
 # --- Stage 2: Final Runtime ---
-# Using Debian Slim for the production environment
-FROM debian:bookworm-slim
+# The official Google Distroless static image for Go
+FROM gcr.io/distroless/static-debian12:nonroot
 
-# Install CA certificates (Required for HTTPS/TLS)
-RUN apt-get update && \
-    apt-get install -y ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+LABEL maintainer="Open Outbox Team"
 
-WORKDIR /root/
+WORKDIR /app
 
-# Copy the binary from the builder
-COPY --from=builder /app/relay .
-COPY --from=builder /app/cli .
+# Copy binaries from builder using the built-in nonroot user (UID 65532)
+COPY --from=builder --chown=nonroot:nonroot /app/relay .
+COPY --from=builder --chown=nonroot:nonroot /app/cli .
 
-# Expose the Health/Metrics API port
+# Standard port for health checks and metrics
 EXPOSE 8080
 
-# Run as a non-root user (Veteran Security Move)
-# This prevents an attacker from gaining root access if they break the app
-RUN useradd -ms /bin/bash openoutbox
-USER openoutbox
+# Use the standard Google nonroot user
+USER nonroot:nonroot
 
-CMD ["./relay"]
+# Execute the binary directly
+ENTRYPOINT ["/app/relay"]

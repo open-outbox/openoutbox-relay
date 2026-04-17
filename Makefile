@@ -106,9 +106,11 @@ ps: ## Show status of all project containers
 # ==========================================
 
 setup: ## Install required local development tools and git hooks
+	@echo "Checking dependencies..."
+	@command -v go >/dev/null 2>&1 || { echo "Error: Go is not installed."; exit 1; }
 	@echo "Installing tools and setting up pre-commit..."
-	brew install pre-commit || pip install pre-commit
-	pre-commit install
+	@pre-commit --version >/dev/null 2>&1 || brew install pre-commit || pip install pre-commit || pip3 install pre-commit || echo "Warning: pre-commit not found. Please install it manually: https://pre-commit.com"
+	@pre-commit install
 	go install golang.org/x/tools/cmd/goimports@latest
 	go install github.com/segmentio/golines@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest

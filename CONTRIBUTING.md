@@ -2,7 +2,7 @@
 
 First off, thank you for considering contributing! It’s people like you who make OpenOutbox a reliable standard for everyone.
 
-We love contributions! If you want to help, please check our [**Roadmap**](./ROADMAP.md) to see our prioritized features and "help wanted" areas.
+We love contributions! If you want to help, please check our [Roadmap](./ROADMAP.md) to see our prioritized features. Look for Phase 2 items if you are interested in building new storage or publisher engines.
 
 ## Local Development Setup
 
@@ -13,6 +13,8 @@ Before starting development make sure you have the following setup.
 * **Go 1.22+**: The core runtime for the relay.
 * **Docker & Docker Compose**: Essential for running integration tests against real instances of Postgres, Kafka, and NATS.
 * **GNU Make** : Used to orchestrate builds, environment setup, and lifecycle management.
+
+> **Note for Windows Users**: We recommend using **WSL2** (Ubuntu) for development. If running natively on Windows, ensure you have `make` installed (via Chocolatey or Scoop) and that your execution policy allows running scripts.
 
 ### How to Run the Service Locally
 
@@ -25,26 +27,34 @@ The easiest way to see the Relay in action is to use the provided local stack.
     cd relay
     ```
 
-2. Create the required .env file
+2. Setup development tools
+
+    ```bash
+    make setup
+    ```
+
+    *Note: `make setup` attempts to install `pre-commit` via Homebrew or Pip. If both fail, please install it manually from [pre-commit.com](https://pre-commit.com) before proceeding.*
+
+3. Create the required .env file
 
     ```bash
     cp .env.example .env
     ```
 
-3. Spin up the storage using docker compose and create `outbox_events` table:
+4. Spin up the storage using docker compose and create `outbox_events` table:
 
     ```bash
     make up-postgres
     make db-init
     ```
 
-4. Run the Relay in development mode:
+5. Run the Relay in development mode:
 
     ```bash
     make run
     ```
 
-5. Produce test events (use another terminal window):
+6. Produce test events (use another terminal window):
 
     ```bash
     make produce
@@ -280,6 +290,7 @@ commands used to create the `outbox_events` table in Postgres, and test the `ote
 * **Conventional Commits**: We use [Conventional Commits](https://www.conventionalcommits.org/) (e.g., `feat:`, `fix:`, `docs:`). This allows us to automate our changelog.
 * **Coverage**: New features must include unit or integration tests. We aim for high coverage on the "Drain" and "Lease" logic.
 * **Single Responsibility**: Keep PRs focused. If you find a bug while adding a feature, please submit two separate PRs.
+* **Code of Conduct**: By contributing to this project, you agree to abide by our [Code of Conduct](./CODE_OF_CONDUCT.md). We strive to maintain a welcoming and professional community.
 
 ## 🏗 Architecture Principles
 

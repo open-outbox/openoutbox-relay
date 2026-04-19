@@ -74,7 +74,11 @@ func BuildContainer(rootCtx context.Context) (*dig.Container, error) {
 				if err != nil {
 					return nil, err
 				}
-				return storage.NewPostgres(pool, logger), nil
+				postgres, err := storage.NewPostgres(pool, cfg.StorageTableName, logger)
+				if err != nil {
+					return nil, err
+				}
+				return postgres, nil
 
 			case "mysql":
 				// return storage.NewMySQL(cfg.DatabaseURL), nil (To be implemented)

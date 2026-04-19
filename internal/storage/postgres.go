@@ -17,17 +17,152 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	sqlClaimBatch = `
+		WITH target_events AS (
+			SELECT event_id
+			FROM {{TABLE}}
+			WHERE
+				-- Standard pickup: status pending and available
+				status = $1 AND available_at <= NOW()
+			ORDER BY available_at ASC, created_at ASC
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		)
+		UPDATE {{TABLE}} as e
+		SET
+			status = $3,
+			locked_by = $4,
+			locked_at = NOW(),
+			updated_at = NOW()
+		FROM target_events as t
+		WHERE e.event_id = t.event_id
+		RETURNING
+			e.event_id,
+			e.event_type,
+			e.partition_key,
+			e.payload,
+			e.headers,
+			e.attempts,
+			e.created_at;
+	`
+	sqlMarkDeliveredBatch = `
+        UPDATE {{TABLE}}
+        SET
+            status = $1,
+			delivered_at = NOW(),
+            locked_by = NULL,
+            locked_at = NULL,
+            updated_at = NOW()
+        WHERE
+			event_id = ANY($2)
+          	AND status = $3
+          	AND locked_by = $4
+    `
+	sqlMarkFailedBatch = `
+        UPDATE {{TABLE}} AS e
+        SET
+            status       = v.status,
+            available_at = v.avail,
+            attempts     = v.att,
+            last_error   = v.err,
+            locked_by    = NULL,
+            locked_at    = NULL,
+            updated_at   = NOW()
+        FROM (
+            SELECT * FROM UNNEST(
+                $1::uuid[],
+                $2::text[],
+                $3::timestamptz[],
+                $4::int[],
+                $5::text[]
+            ) AS t(id, status, avail, att, err)
+        ) AS v
+        WHERE e.event_id = v.id
+          AND e.status = $6     -- Safety: Ensure it hasn't been reaped
+          AND e.locked_by = $7;  -- Ownership: Ensure this relay still owns it
+    `
+	sqlReapExpiredLeases = `
+        WITH stuck_events AS (
+            SELECT event_id
+            FROM {{TABLE}}
+            WHERE status = 'DELIVERING'
+				AND (
+					locked_at < (now() - $1::interval)
+					OR locked_at IS NULL
+				)
+            ORDER BY locked_at ASC
+            LIMIT $2
+            FOR UPDATE SKIP LOCKED
+        )
+        UPDATE {{TABLE}}
+        SET status = 'PENDING',
+            locked_by = NULL,
+            locked_at = NULL
+        FROM stuck_events
+        WHERE {{TABLE}}.event_id = stuck_events.event_id
+    `
+	sqlStats = `
+        SELECT
+            COALESCE((SELECT count(*) FROM {{TABLE}} WHERE status='PENDING'), 0)::bigint,
+            COALESCE(EXTRACT(EPOCH FROM (now() - (SELECT min(created_at)
+				FROM {{TABLE}} WHERE status='PENDING'))), 0)::bigint
+	`
+	sqlPruneStats = `
+		SELECT
+			COUNT(*) FILTER (
+				WHERE $1::text IS NOT NULL
+				AND status = 'DELIVERED'
+				AND delivered_at < NOW() - $1::interval
+			),
+			COUNT(*) FILTER (
+				WHERE $2::text IS NOT NULL
+				AND status = 'DEAD'
+				AND updated_at < NOW() - $2::interval
+			)
+		FROM {{TABLE}};
+	`
+	sqlPruneDelivered = `DELETE FROM {{TABLE}} WHERE status = $1 AND delivered_at < NOW() - $2::interval`
+	sqlPruneDead      = `DELETE FROM {{TABLE}} WHERE status = $1 AND updated_at < NOW() - $2::interval`
+)
+
 // Postgres is a PostgreSQL-backed implementation of the relay.Storage interface.
 // It uses the jackc/pgx/v5 library for efficient connection pooling and
 // PostgreSQL-specific optimizations.
 type Postgres struct {
-	pool   *pgxpool.Pool
-	logger *zap.Logger
+	pool                    *pgxpool.Pool
+	logger                  *zap.Logger
+	queryClaimBatch         string
+	queryMarkDeliveredBatch string
+	queryMarkFailedBatch    string
+	queryReapExpiredLeases  string
+	queryStats              string
+	queryPruneStats         string
+	queryPruneDelivered     string
+	queryPruneDead          string
 }
 
 // NewPostgres creates a new Postgres storage instance using the provided pgx connection pool.
-func NewPostgres(pool *pgxpool.Pool, logger *zap.Logger) *Postgres {
-	return &Postgres{pool: pool, logger: logger}
+func NewPostgres(pool *pgxpool.Pool, tableName string, logger *zap.Logger) (*Postgres, error) {
+	if err := ValidateTableName(tableName); err != nil {
+		return nil, err
+	}
+	logger.Info("postgres storage initialized", zap.String("table", tableName))
+	p := &Postgres{
+		pool:   pool,
+		logger: logger,
+	}
+
+	p.queryClaimBatch = strings.ReplaceAll(sqlClaimBatch, "{{TABLE}}", tableName)
+	p.queryMarkDeliveredBatch = strings.ReplaceAll(sqlMarkDeliveredBatch, "{{TABLE}}", tableName)
+	p.queryMarkFailedBatch = strings.ReplaceAll(sqlMarkFailedBatch, "{{TABLE}}", tableName)
+	p.queryReapExpiredLeases = strings.ReplaceAll(sqlReapExpiredLeases, "{{TABLE}}", tableName)
+	p.queryStats = strings.ReplaceAll(sqlStats, "{{TABLE}}", tableName)
+	p.queryPruneStats = strings.ReplaceAll(sqlPruneStats, "{{TABLE}}", tableName)
+	p.queryPruneDelivered = strings.ReplaceAll(sqlPruneDelivered, "{{TABLE}}", tableName)
+	p.queryPruneDead = strings.ReplaceAll(sqlPruneDead, "{{TABLE}}", tableName)
+
+	return p, nil
 }
 
 // ClaimBatch atomically selects and locks a batch of pending events for the current relay instance.
@@ -42,36 +177,8 @@ func (p *Postgres) ClaimBatch(
 	batchSize int,
 	buf []relay.Event,
 ) ([]relay.Event, error) {
-	query := `
-        WITH target_events AS (
-            SELECT event_id
-            FROM outbox_events
-            WHERE
-                -- Standard pickup: status pending and available
-                status = $1 AND available_at <= NOW()
-            ORDER BY available_at ASC, created_at ASC
-            LIMIT $2
-            FOR UPDATE SKIP LOCKED
-        )
-        UPDATE outbox_events as e
-        SET
-            status = $3,
-            locked_by = $4,
-            locked_at = NOW(),
-            updated_at = NOW()
-        FROM target_events as t
-        WHERE e.event_id = t.event_id
-        RETURNING
-            e.event_id,
-            e.event_type,
-			e.partition_key,
-            e.payload,
-			e.headers,
-            e.attempts,
-			e.created_at;
-    `
 
-	rows, err := p.pool.Query(ctx, query,
+	rows, err := p.pool.Query(ctx, p.queryClaimBatch,
 		relay.StatusPending,
 		batchSize,
 		relay.StatusDelivering,
@@ -118,21 +225,7 @@ func (p *Postgres) MarkDeliveredBatch(
 		return nil
 	}
 
-	query := `
-        UPDATE outbox_events
-        SET
-            status = $1,
-			delivered_at = NOW(),
-            locked_by = NULL,
-            locked_at = NULL,
-            updated_at = NOW()
-        WHERE
-			event_id = ANY($2)
-          	AND status = $3
-          	AND locked_by = $4
-    `
-
-	_, err := p.pool.Exec(ctx, query,
+	_, err := p.pool.Exec(ctx, p.queryMarkDeliveredBatch,
 		relay.StatusDelivered,
 		ids,
 		relay.StatusDelivering,
@@ -175,31 +268,7 @@ func (p *Postgres) MarkFailedBatch(
 		errors[i] = f.LastError
 	}
 
-	query := `
-        UPDATE outbox_events AS e
-        SET
-            status       = v.status,
-            available_at = v.avail,
-            attempts     = v.att,
-            last_error   = v.err,
-            locked_by    = NULL,
-            locked_at    = NULL,
-            updated_at   = NOW()
-        FROM (
-            SELECT * FROM UNNEST(
-                $1::uuid[],
-                $2::text[],
-                $3::timestamptz[],
-                $4::int[],
-                $5::text[]
-            ) AS t(id, status, avail, att, err)
-        ) AS v
-        WHERE e.event_id = v.id
-          AND e.status = $6     -- Safety: Ensure it hasn't been reaped
-          AND e.locked_by = $7;  -- Ownership: Ensure this relay still owns it
-    `
-
-	res, err := p.pool.Exec(ctx, query,
+	res, err := p.pool.Exec(ctx, p.queryMarkFailedBatch,
 		ids,
 		statuses,
 		avails,
@@ -231,28 +300,13 @@ func (p *Postgres) ReapExpiredLeases(
 	leaseTimeout time.Duration,
 	limit int,
 ) (int64, error) {
-	query := `
-        WITH stuck_events AS (
-            SELECT event_id
-            FROM outbox_events
-            WHERE status = 'DELIVERING'
-				AND (
-					locked_at < (now() - $1::interval)
-					OR locked_at IS NULL
-				)
-            ORDER BY locked_at ASC
-            LIMIT $2
-            FOR UPDATE SKIP LOCKED
-        )
-        UPDATE outbox_events
-        SET status = 'PENDING',
-            locked_by = NULL,
-            locked_at = NULL
-        FROM stuck_events
-        WHERE outbox_events.event_id = stuck_events.event_id
-    `
 
-	result, err := p.pool.Exec(ctx, query, durationToInterval(leaseTimeout), limit)
+	result, err := p.pool.Exec(
+		ctx,
+		p.queryReapExpiredLeases,
+		durationToInterval(leaseTimeout),
+		limit,
+	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to reap expired leases: %w", err)
 	}
@@ -265,14 +319,7 @@ func (p *Postgres) ReapExpiredLeases(
 func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
 	var stats relay.Stats
 
-	query := `
-        SELECT
-            COALESCE((SELECT count(*) FROM outbox_events WHERE status='PENDING'), 0)::bigint,
-            COALESCE(EXTRACT(EPOCH FROM (now() - (SELECT min(created_at)
-				FROM outbox_events WHERE status='PENDING'))), 0)::bigint
-	`
-
-	err := p.pool.QueryRow(ctx, query).Scan(
+	err := p.pool.QueryRow(ctx, p.queryStats).Scan(
 		&stats.PendingCount,
 		&stats.OldestAgeSec,
 	)
@@ -331,20 +378,7 @@ func (p *Postgres) countPotentialDeletes(
 	deliveredInterval, deadInterval string,
 ) (relay.PruneResult, error) {
 	var res relay.PruneResult
-	query := `
-		SELECT
-			COUNT(*) FILTER (
-				WHERE $1::text IS NOT NULL
-				AND status = 'DELIVERED'
-				AND delivered_at < NOW() - $1::interval
-			),
-			COUNT(*) FILTER (
-				WHERE $2::text IS NOT NULL
-				AND status = 'DEAD'
-				AND updated_at < NOW() - $2::interval
-			)
-		FROM outbox_events;
-	`
+
 	var dInv, fInv interface{}
 	if deliveredInterval != "" {
 		dInv = deliveredInterval
@@ -353,7 +387,7 @@ func (p *Postgres) countPotentialDeletes(
 		fInv = deadInterval
 	}
 
-	err := p.pool.QueryRow(ctx, query, dInv, fInv).Scan(
+	err := p.pool.QueryRow(ctx, p.queryPruneStats, dInv, fInv).Scan(
 		&res.DeliveredDeleted,
 		&res.DeadDeleted,
 	)
@@ -379,8 +413,7 @@ func (p *Postgres) executePrune(
 	}()
 
 	if deliveredInterval != "" {
-		q := `DELETE FROM outbox_events WHERE status = $1 AND delivered_at < NOW() - $2::interval`
-		tag, err := tx.Exec(ctx, q, relay.StatusDelivered, deliveredInterval)
+		tag, err := tx.Exec(ctx, p.queryPruneDelivered, relay.StatusDelivered, deliveredInterval)
 		if err != nil {
 			return res, fmt.Errorf("failed to prune delivered: %w", err)
 		}
@@ -388,8 +421,7 @@ func (p *Postgres) executePrune(
 	}
 
 	if deadInterval != "" {
-		q := `DELETE FROM outbox_events WHERE status = $1 AND updated_at < NOW() - $2::interval`
-		tag, err := tx.Exec(ctx, q, relay.StatusDead, deadInterval)
+		tag, err := tx.Exec(ctx, p.queryPruneDead, relay.StatusDead, deadInterval)
 		if err != nil {
 			return res, fmt.Errorf("failed to prune dead: %w", err)
 		}

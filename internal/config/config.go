@@ -27,12 +27,20 @@ const (
 // DefaultRetryJitter prevents "Thundering Herd" issues by staggering retries.
 const DefaultRetryJitter = 0.15
 
+// DefaultTableName is the standard table name for the events if none is provided.
+const DefaultTableName = "openoutbox_events"
+
 // Config represents the application's entire configuration state.
 // It uses mapstructure tags for automatic type conversion from environment strings.
 type Config struct {
 	// StorageType determines the type of outbox storage (e.g., "postgres", "mysql").
 	//	Default: "postgres"
 	StorageType string `mapstructure:"STORAGE_TYPE"`
+
+	// TableName is the name of the outbox table.
+	// This allows users to avoid naming collisions in shared databases.
+	//	Default: "outbox_events"
+	StorageTableName string `mapstructure:"STORAGE_TABLE_NAME"`
 
 	// PublisherType determines the message broker or output
 	// (e.g., "nats", "kafka", "redis", "stdout").
@@ -170,12 +178,14 @@ func Load() (*Config, error) {
 	// Initializing Safe Application Defaults
 	// We default to "postgres" and "stdout" to ensure a functional starting point.
 	v.SetDefault("STORAGE_TYPE", "postgres")
+	v.SetDefault("STORAGE_TABLE_NAME", DefaultTableName)
 	v.SetDefault("PUBLISHER_TYPE", "stdout")
 	v.SetDefault("POLL_INTERVAL", "500ms")
 	v.SetDefault("BATCH_SIZE", 100)
 	v.SetDefault("LEASE_TIMEOUT", "3m")
 	v.SetDefault("REAP_BATCH_SIZE", 100)
 	v.SetDefault("SERVER_PORT", ":8080")
+	v.SetDefault("ENVIRONMENT", Production)
 	v.SetDefault("ENVIRONMENT", Production)
 
 	// Default Retry Policies using the defined Jitter constant.

@@ -46,53 +46,10 @@ The fastest way to see the Relay in action is our pre-configured demo environmen
 
 ---
 
-## Production Setup
-
-Once you've seen the demo, follow these steps to integrate the Relay into your own stack.
-
-### 1. Database Schema
-
-The Relay requires an `openoutbox_events` table. Run the standard DDL found in:
-[`schema/postgres/open-outbox.sql`](https://github.com/open-outbox/relay/blob/main/schema/postgres/open-outbox.sql)
-
-<Aside type="tip">
-  Ensure your database user has `INSERT`, `SELECT`, and `UPDATE` permissions on this table.
-</Aside>
-
-### 2. Deployment
-
-Configure the Relay to point to your specific database and broker.
-
-<Tabs>
-  <TabItem label="Docker Compose">
-    ```yaml
-    services:
-      relay:
-        image: openoutbox/relay:latest
-        container_name: openoutbox-relay
-        environment:
-          - STORAGE_TYPE=postgres
-          - STORAGE_URL=postgres://user:password@server:5432/db
-          - PUBLISHER_TYPE=kafka # kafka, nats, stdout, etc.
-          - PUBLISHER_URL=kafka:9092 # broker url
-        restart: always
-    ```
-  </TabItem>
-  <TabItem label="Docker CLI">
-    ```bash
-    docker run -d \
-      --name openoutbox-relay \
-      -e STORAGE_URL="postgres://user:pass@server:5432/db" \
-      -e PUBLISHER_TYPE="kafka" \
-      -e PUBLISHER_URL="localhost:9092" \
-      openoutbox/relay:latest
-    ```
-  </TabItem>
-</Tabs>
-
----
-
 ## Next Steps
 
-- Learn how to [Prune Historical Data](/operations/maintenance) to keep your database lean.
-- Explore the [Configuration Reference](/reference/configuration) for advanced tuning.
+Now that you've seen the Relay in action, you're ready to integrate it into your own infrastructure.
+
+* **[Deployment Guide](/guides/deployment):** Learn how to apply the database schema and deploy the Relay to your own environment.
+* **[Configuration Reference](/reference/configuration):** Explore all environment variables for tuning and reliability.
+* **[Maintenance Guide](/guides/maintenance):** Learn how to use the CLI to prune historical data.

@@ -1,15 +1,29 @@
 ---
 title: Maintenance & CLI
-description: How to use the OpenOutbox CLI for pruning, maintenance, and operational tasks.
+description: How to use the Open Outbox CLI for pruning, maintenance, and operational tasks.
 ---
 
 import { Tabs, TabItem, Steps, Aside } from '@astrojs/starlight/components';
 
-To maintain peak performance, the outbox table must be periodically cleaned. The OpenOutbox Relay includes a built-in CLI designed for maintenance, cleanup, and manual intervention.
+To maintain peak performance, the outbox table must be periodically cleaned. The OpenOutbox Relay includes a
+built-in CLI designed for maintenance, cleanup, and manual intervention.
+
+## Scaling & Maintenance
+
+OpenOutbox is designed to handle tables with **millions of records** efficiently using standard indexes.
+However, regular maintenance is required to keep indexes lean and prevent database bloat.
+
+### When to Consider Partitioning
+While the Relay handles high-volume workloads, if your dataset grows into the **hundreds of millions or
+billions of records**, standard `DELETE` operations will eventually become a bottleneck.
+
+At this scale, we recommend implementing **Table Partitioning** (e.g., by date) at the database level.
+This allows you to manage data by dropping old partitions rather than executing row-by-row deletions.
+Note that partition rotation must be managed externally, as OpenOutbox does not natively manage database partitions.
 
 ## Pruning Historical Data
 
-As your system scales, successfully delivered or exhausted (dead) events should be removed to keep database indexes lean and queries fast.
+Successfully delivered or exhausted (dead) events should be removed periodically to maintain query speed.
 
 <Aside type="danger" title="Performance Requirement">
 Pruning high-volume tables can be resource-intensive. Before running your first prune, ensure you have applied the specialized maintenance indexes found in:
@@ -24,29 +38,51 @@ You can prune events based on their age and status:
 
 ---
 
-## Usage Examples
+## CLI Configuration & Usage
+
+The maintenance CLI is bundled within the standard Relay image. To use it with Docker Compose, you must first define a `cli`
+service in your `docker-compose.yaml` with the correct entrypoint and profile.
+
+```yaml
+services:
+  # Main Relay Service
+  relay:
+    image: openoutbox/relay:latest
+    # ... other config
+
+  # Maintenance CLI Service
+  cli:
+    image: openoutbox/relay:latest
+    entrypoint: ["/app/cli"]
+    environment:
+      - STORAGE_TYPE=postgres
+      - STORAGE_URL=postgres://user:pass@db-host:5432/db
+    profiles: ["tools"] # Prevents the CLI from starting with 'up'
+```
+
+### Usage Examples
+
+Once configured, use the `docker compose run` command to invoke the pruning tool.
 
 <Tabs>
   <TabItem label="Docker Compose">
-    If using the standard `docker-compose.yml`, run the maintenance command via the `cli` service.
-
-    **Dry Run (Simulation):**
+    **Dry Run (Simulation):** Verify the impact before deleting data
     ```bash
     docker compose run --rm cli prune --delivered-age 7d --dead-age 30d --dry-run
     ```
 
-    **Execute Pruning:**
+    **Execute Pruning:** Remove successfully delivered events older than 7 days and dead events older than 30 days.
     ```bash
     docker compose run --rm cli prune --delivered-age 7d --dead-age 30d
     ```
   </TabItem>
   <TabItem label="Docker CLI">
-    If running without Compose, override the entrypoint to access the CLI binary.
-
+    Use this for one-off tasks or scripts without `docker ompose`. Note that you must explicitly map the network
+    and environment variables.
     ```bash
     docker run --rm \
       --network open-outbox-network \
-      -e STORAGE_URL="postgres://postgres:postgres@postgres:5432/postgres" \
+      -e STORAGE_URL="postgres://user:pass@host:5432/db" \
       --entrypoint "/app/cli" \
       openoutbox/relay:latest \
       prune --delivered-age 7d --dead-age 30d
@@ -58,7 +94,7 @@ You can prune events based on their age and status:
 
 ## Automation via Cron
 
-For production environments, we recommend automating maintenance. Add an entry to your crontab (ensure you use the `-T` flag for Docker Compose in non-interactive environments).
+For production environments, automate maintenance using a system crontab.
 
 ```bash
 # Run daily at 2:00 AM

@@ -41,6 +41,8 @@ docker compose up -d
 
 Insert a record directly into the Postgres outbox table. The Relay will detect the new row and deliver it to the message broker instantly.
 
+> -- Note: Requires Postgres 13+ or pgcrypto extension for gen_random_uuid()
+
 ```bash
 docker compose exec postgres psql -U postgres -d postgres -c \
 "INSERT INTO openoutbox_events (event_id, event_type, payload, partition_key)

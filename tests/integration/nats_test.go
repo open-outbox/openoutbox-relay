@@ -12,11 +12,7 @@ import (
 	nats_go "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/nats"
-	"github.com/testcontainers/testcontainers-go/wait"
 
-	dockercontainer "github.com/moby/moby/api/types/container"
 	"github.com/open-outbox/relay/internal/container"
 	"github.com/open-outbox/relay/internal/relay"
 )
@@ -27,18 +23,7 @@ func TestNatsHappyPath(t *testing.T) {
 
 	db, pgConnStr := setupTestPostgres(t)
 
-	// Start NATS
-	natsContainer, err := nats.Run(ctx, "nats:2.10-alpine",
-		testcontainers.WithWaitStrategy(wait.ForLog("Server is ready")),
-		testcontainers.WithConfigModifier(func(conf *dockercontainer.Config) {
-			conf.Cmd = []string{"-js"}
-		}),
-	)
-	require.NoError(t, err)
-	t.Cleanup(func() { natsContainer.Terminate(context.Background()) })
-
-	// Setup Environment for config.Load()
-	natsUrl, _ := natsContainer.ConnectionString(ctx)
+	nc, natsUrl := setupNats(t)
 
 	t.Setenv("ENVIRONMENT", "production")
 	t.Setenv("STORAGE_TYPE", "postgres")
@@ -55,7 +40,6 @@ func TestNatsHappyPath(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	nc, err := nats_go.Connect(natsUrl)
 	require.NoError(t, err)
 	defer nc.Close()
 

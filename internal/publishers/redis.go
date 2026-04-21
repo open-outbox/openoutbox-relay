@@ -120,7 +120,7 @@ func (r *Redis) isRedisErrorRetryable(err error) bool {
 }
 
 // Close gracefully shuts down the Redis client and its underlying connection pool.
-func (r *Redis) Close() error {
+func (r *Redis) Close(ctx context.Context) error {
 	if r.client == nil {
 		return nil
 	}

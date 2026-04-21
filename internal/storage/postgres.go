@@ -356,7 +356,7 @@ func (p *Postgres) Prune(ctx context.Context, opts relay.PruneOptions) (relay.Pr
 }
 
 // Close gracefully shuts down the underlying pgx connection pool.
-func (p *Postgres) Close() error { p.pool.Close(); return nil }
+func (p *Postgres) Close(ctx context.Context) error { p.pool.Close(); return nil }
 
 // Ping checks the health of the Postgres connection pool. It ensures
 // that the database is reachable and accepting commands. This is

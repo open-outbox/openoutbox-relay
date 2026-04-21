@@ -44,7 +44,7 @@ func (s *Stdout) Publish(_ context.Context, event relay.Event) error {
 }
 
 // Close does nothing on the Stdout publisher
-func (s *Stdout) Close() error {
+func (s *Stdout) Close(ctx context.Context) error {
 	return nil
 }
 

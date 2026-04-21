@@ -31,7 +31,7 @@ type Publisher interface {
 
 	// Close performs a graceful shutdown of the publisher, ensuring any
 	// buffered data is flushed and network resources are released.
-	Close() error
+	Close(ctx context.Context) error
 
 	// Ping verifies the connectivity to the message broker (e.g., Kafka, NATS).
 	// It ensures the publisher is authenticated and capable of sending messages.

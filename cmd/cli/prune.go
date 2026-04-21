@@ -41,7 +41,7 @@ var pruneCmd = &cobra.Command{
 
 		return di.Invoke(func(s relay.Storage, logger *zap.Logger) error {
 			defer func() { _ = logger.Sync() }()
-			defer func() { _ = s.Close() }()
+			defer func() { _ = s.Close(cmd.Context()) }()
 
 			logger.Info("starting prune operation",
 				zap.String("delivered_age", deliveredAge),

@@ -96,7 +96,7 @@ func (n *Nats) Publish(ctx context.Context, event relay.Event) error {
 }
 
 // Close gracefully shuts down the NATS connection.
-func (n *Nats) Close() error {
+func (n *Nats) Close(ctx context.Context) error {
 	if n.conn != nil {
 		n.conn.Close()
 	}

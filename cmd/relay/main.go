@@ -59,7 +59,7 @@ func run() error {
 			}()
 
 			defer func() {
-				if err := engine.Stop(); err != nil {
+				if err := engine.Stop(ctx); err != nil {
 					logger.Error("Failed to stop engine cleanly", zap.Error(err))
 				}
 			}()

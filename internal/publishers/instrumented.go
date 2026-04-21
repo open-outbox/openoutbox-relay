@@ -83,8 +83,8 @@ func (ip *InstrumentedPublisher) Publish(ctx context.Context, event relay.Event)
 }
 
 // Close closes the underlying publisher.
-func (ip *InstrumentedPublisher) Close() error {
-	return ip.publisher.Close()
+func (ip *InstrumentedPublisher) Close(ctx context.Context) error {
+	return ip.publisher.Close(ctx)
 }
 
 // Ping verifies the connectivity of the underlying publisher to the message broker.

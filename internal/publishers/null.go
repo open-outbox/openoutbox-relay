@@ -23,7 +23,7 @@ func (n *Null) Publish(_ context.Context, _ relay.Event) error {
 }
 
 // Close does nothing on the Null publisher
-func (n *Null) Close() error {
+func (n *Null) Close(ctx context.Context) error {
 	return nil
 }
 

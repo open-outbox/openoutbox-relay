@@ -144,16 +144,16 @@ func (e *Engine) Start(ctx context.Context) error {
 
 // Stop performs a graceful shutdown of the Engine.
 // It closes the underlying storage and publisher connections to ensure no data loss.
-func (e *Engine) Stop() error {
+func (e *Engine) Stop(ctx context.Context) error {
 	e.logger.Info("Stopping engine: shutting down storage and publisher...")
 
 	var errs []error
 
-	if err := e.storage.Close(); err != nil {
+	if err := e.storage.Close(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("storage close: %w", err))
 	}
 
-	if err := e.publisher.Close(); err != nil {
+	if err := e.publisher.Close(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("publisher close: %w", err))
 	}
 

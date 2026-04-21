@@ -159,7 +159,7 @@ func (k *Kafka) mapToKafkaMessage(event relay.Event) (kafka.Message, error) {
 
 // Close gracefully shuts down the Kafka publisher.
 // It blocks until all buffered messages are flushed or the context expires.
-func (k *Kafka) Close() error {
+func (k *Kafka) Close(ctx context.Context) error {
 	if k.writer == nil {
 		return nil
 	}

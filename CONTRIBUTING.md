@@ -257,13 +257,24 @@ This is required to make the [Quality and Linting](./#quality-and-linting) comma
 
 ### Quality & Linting
 
-commands used to check for code quality, and testing, required for local development.
+Commands used to check for code quality, required for local development.
 
 | Command | Description |
 | :--- | :--- |
 | `make fmt` | Format code, organize imports, and enforce 100-char line limits. |
 | `make lint` | Runs `fmt` and then golangci-lint to catch code quality issues. |
 | `make test` | Run all project tests with the race detector enabled. |
+
+### Testing
+
+Automated testing commands
+
+| Command | Description |
+| :--- | :--- |
+| `make test` | Runs unit tests in `internal/` without the race detector or cache-busting. |
+| `make test-integration` | Runs integration tests with the race detector. |
+| `make test-all` | Runs all tests (Unit + Integration) with race detection. |
+| `make test-clean` | Cleans the Go test cache to ensure a fresh execution of all suites. |
 
 ### Infrastructure
 

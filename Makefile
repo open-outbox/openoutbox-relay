@@ -126,7 +126,7 @@ setup: ## Install required local development tools and git hooks
 	@pre-commit install
 	go install golang.org/x/tools/cmd/goimports@latest
 	go install github.com/segmentio/golines@latest
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
 
 # ==========================================

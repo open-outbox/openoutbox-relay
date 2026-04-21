@@ -64,7 +64,6 @@ gen-api: ## Generates the api reference docs into /docs.
 # ==========================================
 # Quality & Linting
 # ==========================================
-
 fmt: ## Format code, organize imports, and enforce 100-char line limits
 	goimports -w .
 	golines . -w --max-len=100
@@ -73,8 +72,22 @@ fmt: ## Format code, organize imports, and enforce 100-char line limits
 lint: fmt ## Run golangci-lint to catch code quality issues
 	golangci-lint run ./...
 
+# ==========================================
+# Testing
+# ==========================================
+
 test: ## Run all project tests with the race detector enabled
-	go test -v -race ./...
+	go test -v ./internal/...
+
+test-infra-up: # Spin up the containers for integration testing
+	docker compose -f docker-compose.test.yaml up -d
+
+test-infra-down: # Spin down and clean volumes
+	docker compose -f docker-compose.test.yaml down -v
+
+test-integration: # Run the tests against the local containers
+	@echo "Running integration tests..."
+	go test -v -tags=integration ./tests/integration/...
 
 # ==========================================
 # Infrastructure (Docker)

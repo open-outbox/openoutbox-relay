@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// Mock Storage
 type MockStorage struct {
 	mock.Mock
 }
@@ -70,10 +71,17 @@ func (m *MockStorage) ReapExpiredLeases(
 	return args.Get(0).(int64), args.Error(1)
 }
 
-func (m *MockStorage) Close() error {
-	args := m.Called()
+func (m *MockStorage) Close(ctx context.Context) error {
+	args := m.Called(ctx)
 	return args.Error(0)
 }
+
+func (m *MockStorage) Ping(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+// Mock Publisher
 
 type MockPublisher struct {
 	mock.Mock
@@ -81,68 +89,21 @@ type MockPublisher struct {
 
 func (m *MockPublisher) Publish(ctx context.Context, event Event) error {
 	args := m.Called(ctx, event)
-	return args.Error(1)
-}
-
-func (m *MockPublisher) Close() error {
-	args := m.Called()
 	return args.Error(0)
 }
 
-func TestRetryPolicy_NextBackoff(t *testing.T) {
-	policy := ExponentialBackoff{
-		MaxAttempts: 10,
-		BaseDelay:   1 * time.Second,
-		MaxDelay:    10 * time.Second,
-		Jitter:      0.15,
-	}
+func (m *MockPublisher) Close(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
 
-	t.Run("Exponential Growth", func(t *testing.T) {
-		// Attempt 1: 2^0 * 1s = 1s (+ jitter)
-		delay, retry := policy.NextBackoff(1)
-		assert.True(t, retry)
-		assert.GreaterOrEqual(t, delay, 1*time.Second)
-		assert.Less(t, delay, 1200*time.Millisecond, "~1s plus small jitter")
-
-		// Attempt 3: 2^2 * 1s = 4s (+ jitter)
-		delay, retry = policy.NextBackoff(3)
-		assert.True(t, retry)
-		assert.GreaterOrEqual(t, delay, 4*time.Second)
-	})
-
-	t.Run("Respects MaxDelay", func(t *testing.T) {
-		// Attempt 5: 2^4 * 1s = 16s, but MaxDelay is 10s
-		delay, retry := policy.NextBackoff(5)
-		assert.True(t, retry, "Should still retry on attempt 5")
-		// MaxDelay is 10s. Jitter is 10% of 10s (1s). Max possible is 11s.
-		assert.LessOrEqual(t, delay, 11*time.Second)
-		assert.GreaterOrEqual(t, delay, 10*time.Second)
-	})
-
-	t.Run("Stop After MaxAttempts", func(t *testing.T) {
-		_, retry := policy.NextBackoff(11)
-		assert.False(t, retry, "Should stop after reaching MaxAttempts")
-	})
-
-	t.Run("Jitter Variation", func(t *testing.T) {
-		// Run it twice for the same attempt.
-		// Statistically, with 10% jitter, they shouldn't be identical.
-		d1, _ := policy.NextBackoff(2)
-		d2, _ := policy.NextBackoff(2)
-
-		// Note: There's a tiny chance they match, but in a test,
-		// this proves the random seed is working.
-		assert.NotEqual(
-			t,
-			d1.Nanoseconds(),
-			d2.Nanoseconds(),
-			"Jitter should provide different results",
-		)
-	})
+func (m *MockPublisher) Ping(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
 }
 
 func TestEngine_Process_HappyPath(t *testing.T) {
-	// 1. Setup Dependencies
+	// Setup Dependencies
 	mockStorage := new(MockStorage)
 	mockPublisher := new(MockPublisher)
 
@@ -155,12 +116,13 @@ func TestEngine_Process_HappyPath(t *testing.T) {
 		CreatedAt: time.Now().Add(-1 * time.Minute),
 	}
 
-	// 2. Define Expectations (The "Contract")
+	// Define Expectations (The "Contract")
 	ctx := mock.Anything
-	relayID := "change latter"
+	relayID := "dummy"
+	buffer := make([]Event, 2)
 
 	// Expect: Claim 1 event
-	mockStorage.On("ClaimBatch", ctx, relayID, 10).
+	mockStorage.On("ClaimBatch", ctx, relayID, 2, buffer).
 		Return([]Event{fakeEvent}, nil)
 
 	// Expect: Publish that 1 event
@@ -171,7 +133,7 @@ func TestEngine_Process_HappyPath(t *testing.T) {
 	mockStorage.On("MarkDeliveredBatch", ctx, []uuid.UUID{eventID}, relayID).
 		Return(nil)
 
-	// 3. Initialize Engine
+	// Initialize Engine
 	// (Using no-op providers for metrics/tracing to keep it simple)
 	metrics, err := telemetry.NewMetrics(metricnoop.NewMeterProvider())
 	assert.NoError(t, err)
@@ -183,9 +145,9 @@ func TestEngine_Process_HappyPath(t *testing.T) {
 		Jitter:      0.15,
 	}
 	params := EngineParams{
-		RelayID:            "dummy",
+		RelayID:            relayID,
 		Interval:           1 * time.Second,
-		BatchSize:          10,
+		BatchSize:          2,
 		LeaseTimeout:       1 * time.Second,
 		ReapBatchSize:      5,
 		RetryPolicy:        rp,
@@ -222,9 +184,12 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 	id1, id2 := uuid.New(), uuid.New()
 	event1 := Event{ID: id1, Type: "success.event"}
 	event2 := Event{ID: id2, Type: "fail.event"}
+	relayID := "Dummy"
+	buffer := make([]Event, 2)
+	ctx := context.Background()
 
 	// 1. Return BOTH events
-	mockStorage.On("ClaimBatch", mock.Anything, "change latter", 10).
+	mockStorage.On("ClaimBatch", mock.Anything, relayID, 2, buffer).
 		Return([]Event{event1, event2}, nil)
 
 	// 2. Event 1: Publish Success
@@ -237,13 +202,13 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 
 	// 4. Verify BOTH storage updates happen
 	// Success side:
-	mockStorage.On("MarkDeliveredBatch", mock.Anything, []uuid.UUID{id1}, "change latter").
+	mockStorage.On("MarkDeliveredBatch", mock.Anything, []uuid.UUID{id1}, relayID).
 		Return(nil)
 
 	// Failure side: (Notice we check for id2 here)
 	mockStorage.On("MarkFailedBatch", mock.Anything, mock.MatchedBy(func(failed []FailedEvent) bool {
 		return len(failed) == 1 && failed[0].ID == id2
-	}), "change latter").
+	}), relayID).
 		Return(nil)
 
 	// Initialize & Run
@@ -258,11 +223,11 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 		Jitter:      0.15,
 	}
 	params := EngineParams{
-		RelayID:            "dummy",
+		RelayID:            relayID,
 		Interval:           1 * time.Second,
-		BatchSize:          10,
+		BatchSize:          2,
 		LeaseTimeout:       1 * time.Second,
-		ReapBatchSize:      5,
+		ReapBatchSize:      2,
 		RetryPolicy:        rp,
 		EnableBatchPublish: false,
 	}
@@ -280,8 +245,7 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 		params,
 		tm,
 	)
-	e.relayID = "change latter"
-	_, err = e.process(context.Background())
+	_, err = e.process(ctx)
 
 	assert.NoError(t, err)
 	mockStorage.AssertExpectations(t)

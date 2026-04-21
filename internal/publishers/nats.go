@@ -96,7 +96,7 @@ func (n *Nats) Publish(ctx context.Context, event relay.Event) error {
 }
 
 // Close gracefully shuts down the NATS connection.
-func (n *Nats) Close(ctx context.Context) error {
+func (n *Nats) Close(_ context.Context) error {
 	if n.conn != nil {
 		n.conn.Close()
 	}
@@ -106,7 +106,7 @@ func (n *Nats) Close(ctx context.Context) error {
 // Ping verifies the connectivity to the NATS server. It checks if the
 // underlying connection is active and capable of communicating with
 // the NATS cluster.
-func (n *Nats) Ping(ctx context.Context) error {
+func (n *Nats) Ping(_ context.Context) error {
 	if n.conn == nil || !n.conn.IsConnected() {
 		return fmt.Errorf("nats connection is not active")
 	}

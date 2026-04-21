@@ -25,12 +25,12 @@ type Server struct {
 
 func registerHandlers(s *Server, mux *http.ServeMux) {
 	mux.HandleFunc("/stats", s.handleStats)
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"OK"}`))
+		_, _ = w.Write([]byte(`{"status":"OK"}`))
 	})
-	mux.HandleFunc("/readyz", s.handleHealthz)
+	mux.HandleFunc("/readyz", s.handleReadyZ)
 }
 
 // NewServer creates an instrumented HTTP server. It uses otelhttp to
@@ -81,29 +81,30 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleHealthz responds with 200 OK if the relay is healthy and can
-// communicate with its storage and publisher backends.
-func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+// handleReadyZ performs a deep health check, verifying connectivity to both
+// the storage and publisher backends. It returns 200 OK only if all systems
+// are reachable, otherwise it returns 503 Service Unavailable.
+func (s *Server) handleReadyZ(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
 	// 1. Check DB
 	if err := s.storage.Ping(ctx); err != nil {
 		s.logger.Error("db unreachable", zap.Error(err))
-		http.Error(w, "storage error", 503)
+		http.Error(w, "storage error", http.StatusServiceUnavailable)
 		return
 	}
 
 	// 2. Check Publisher (Optional but recommended)
 	if err := s.publisher.Ping(ctx); err != nil {
 		s.logger.Error("broker unreachable", zap.Error(err))
-		http.Error(w, "broker error", 503)
+		http.Error(w, "broker error", http.StatusServiceUnavailable)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"OK"}`))
+	_, _ = w.Write([]byte(`{"status":"OK"}`))
 }
 
 // Start runs the HTTP server. It blocks until the provided context is canceled

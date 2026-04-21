@@ -44,11 +44,11 @@ func (s *Stdout) Publish(_ context.Context, event relay.Event) error {
 }
 
 // Close does nothing on the Stdout publisher
-func (s *Stdout) Close(ctx context.Context) error {
+func (s *Stdout) Close(_ context.Context) error {
 	return nil
 }
 
 // Ping does nothing on the Stdout publisher
-func (s *Stdout) Ping(ctx context.Context) error {
+func (s *Stdout) Ping(_ context.Context) error {
 	return nil
 }

@@ -23,11 +23,11 @@ func (n *Null) Publish(_ context.Context, _ relay.Event) error {
 }
 
 // Close does nothing on the Null publisher
-func (n *Null) Close(ctx context.Context) error {
+func (n *Null) Close(_ context.Context) error {
 	return nil
 }
 
 // Ping does nothing on the Null publisher
-func (n *Null) Ping(ctx context.Context) error {
+func (n *Null) Ping(_ context.Context) error {
 	return nil
 }

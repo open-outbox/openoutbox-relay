@@ -13,24 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type seedOptions struct {
-	ID          uuid.UUID
-	Status      relay.Status
-	CreatedAt   time.Time
-	AvailableAt time.Time
-	DeliveredAt *time.Time
-	UpdatedAt   *time.Time
-	LockedAt    *time.Time
-	LockedBy    string
-	Attempts    int
-}
-
-func ptr[T any](v T) *T {
-	return &v
-}
-
-type EventSeeder func(seedOptions)
-
 func runStorageContractTest(
 	t *testing.T,
 	store relay.Storage,
@@ -54,26 +36,26 @@ func runStorageContractTest(
 		id3, id4 := uuid.New(), uuid.New()
 
 		// id1: Oldest
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:          id1,
 			Status:      relay.StatusPending,
 			CreatedAt:   now.Add(-10 * time.Minute),
 			AvailableAt: now.Add(-10 * time.Minute)})
 		// id2: Newer than id1
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:          id2,
 			Status:      relay.StatusPending,
 			CreatedAt:   now.Add(-5 * time.Minute),
 			AvailableAt: now.Add(-5 * time.Minute),
 		})
 		// id3: Same created_at as id4, but id3 available_at is earlier
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:          id3,
 			Status:      relay.StatusPending,
 			CreatedAt:   now.Add(-2 * time.Minute),
 			AvailableAt: now.Add(-1 * time.Minute),
 		})
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:          id4,
 			Status:      relay.StatusPending,
 			CreatedAt:   now.Add(-2 * time.Minute),
@@ -106,7 +88,7 @@ func runStorageContractTest(
 	runTest("Claiming/StateTransitionAndExclusion", func(t *testing.T) {
 		now := time.Now().Truncate(time.Millisecond)
 		eventID := uuid.New()
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:          eventID,
 			Status:      relay.StatusPending,
 			CreatedAt:   now.Add(-10 * time.Minute),
@@ -134,7 +116,7 @@ func runStorageContractTest(
 		now := time.Now().Truncate(time.Millisecond)
 		eventID := uuid.New()
 		// Available in future
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:          eventID,
 			Status:      relay.StatusPending,
 			CreatedAt:   now.Add(-10 * time.Minute),
@@ -149,7 +131,7 @@ func runStorageContractTest(
 	runTest("Lifecycle/MarkDeliveredBatch", func(t *testing.T) {
 		now := time.Now().Truncate(time.Millisecond)
 		eventID := uuid.New()
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:          eventID,
 			Status:      relay.StatusPending,
 			CreatedAt:   now.Add(-1 * time.Minute),
@@ -171,7 +153,7 @@ func runStorageContractTest(
 	runTest("Lifecycle/MarkFailedBatch/Retryable", func(t *testing.T) {
 		now := time.Now().Truncate(time.Millisecond)
 		eventID := uuid.New()
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:          eventID,
 			Status:      relay.StatusPending,
 			CreatedAt:   now.Add(-1 * time.Minute),
@@ -220,7 +202,7 @@ func runStorageContractTest(
 	runTest("Lifecycle/MarkFailedBatch/Quarantine", func(t *testing.T) {
 		now := time.Now().Truncate(time.Millisecond)
 		eventID := uuid.New()
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:          eventID,
 			Status:      relay.StatusPending,
 			CreatedAt:   now.Add(-1 * time.Minute),
@@ -254,7 +236,7 @@ func runStorageContractTest(
 	runTest("Reaper/RecoversStuckEvents", func(t *testing.T) {
 		eventID := uuid.New()
 		// Seed an event locked by a "crashed" worker 20 minutes ago
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:       eventID,
 			Status:   relay.StatusDelivering,
 			LockedAt: ptr(time.Now().Add(-20 * time.Minute)),
@@ -282,19 +264,19 @@ func runStorageContractTest(
 		idLocked := uuid.New() // 20 mins old, but DELIVERING
 
 		// Oldest PENDING
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:        idOldest,
 			Status:    relay.StatusPending,
 			CreatedAt: now.Add(-10 * time.Minute),
 		})
 		// Newer PENDING
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:        idNewer,
 			Status:    relay.StatusPending,
 			CreatedAt: now.Add(-1 * time.Minute),
 		})
 		// Manually seed a locked event (should be ignored by PendingCount and Age)
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:     idLocked,
 			Status: relay.StatusDelivering,
 		})
@@ -341,27 +323,27 @@ func runStorageContractTest(
 
 		// Helper to seed specific states (you might need to add a seedPrunable helper)
 		// seedRaw(id, status, createdAt, availableAt)
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:          idDeliveredOld,
 			Status:      relay.StatusDelivered,
 			DeliveredAt: ptr(now.Add(-48 * time.Hour)),
 		})
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:          idDeliveredNew,
 			Status:      relay.StatusDelivered,
 			DeliveredAt: ptr(now.Add(-1 * time.Hour)),
 		})
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:        idDeadOld,
 			Status:    relay.StatusDead,
 			UpdatedAt: ptr(now.Add(-40 * 24 * time.Hour)),
 		})
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:        idDeadOld2,
 			Status:    relay.StatusDead,
 			UpdatedAt: ptr(now.Add(-40 * 24 * time.Hour)),
 		})
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			ID:        idPendingOld,
 			Status:    relay.StatusPending,
 			CreatedAt: now.Add(-40 * 24 * time.Hour),
@@ -467,7 +449,7 @@ func runStorageContractTest(
 		assert.Equal(t, int64(0), affected)
 
 		// Seed and reap twice
-		seed(seedOptions{
+		seed.Seed(SeedOptions{
 			Status:   relay.StatusDelivering,
 			LockedAt: ptr(time.Now().Add(-20 * time.Minute)),
 		})

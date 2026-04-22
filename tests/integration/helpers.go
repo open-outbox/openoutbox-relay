@@ -5,13 +5,17 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	dockercontainer "github.com/moby/moby/api/types/container"
 	nats_go "github.com/nats-io/nats.go"
+	"github.com/open-outbox/relay/internal/relay"
 	kafka_go "github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -20,6 +24,37 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
+
+type SeedOptions struct {
+	ID          uuid.UUID
+	Status      relay.Status
+	CreatedAt   time.Time
+	AvailableAt time.Time
+	DeliveredAt *time.Time
+	UpdatedAt   *time.Time
+	LockedAt    *time.Time
+	LockedBy    string
+	Attempts    int
+}
+
+func ptr[T any](v T) *T {
+	return &v
+}
+
+type EventSeeder interface {
+	Seed(opts SeedOptions)
+}
+
+type PostgresSeeder struct {
+	t         *testing.T
+	ctx       context.Context
+	pool      *pgxpool.Pool
+	tableName string
+}
+
+func (s *PostgresSeeder) Seed(opts SeedOptions) {
+	seedPostgres(s.ctx, opts, s.pool, s.tableName)
+}
 
 func setupTestPostgres(t *testing.T) (*sql.DB, string) {
 	t.Helper()
@@ -108,4 +143,42 @@ func createKafkaTopic(t *testing.T, broker string, topic string) {
 		ReplicationFactor: 1,
 	})
 	require.NoError(t, err)
+}
+
+func seedPostgres(ctx context.Context, opts SeedOptions, pool *pgxpool.Pool, tableName string) {
+	if opts.ID == uuid.Nil {
+		opts.ID = uuid.New()
+	}
+	if opts.CreatedAt.IsZero() {
+		opts.CreatedAt = time.Now().Add(-1 * time.Minute)
+	}
+	if opts.AvailableAt.IsZero() {
+		opts.AvailableAt = opts.CreatedAt
+	}
+	if opts.Status == "" {
+		opts.Status = relay.StatusPending
+	}
+	if opts.Status == relay.StatusDelivered && opts.DeliveredAt == nil {
+		opts.DeliveredAt = &opts.CreatedAt
+	}
+	if opts.UpdatedAt == nil {
+		opts.UpdatedAt = &opts.CreatedAt
+	}
+
+	query := fmt.Sprintf(`
+			INSERT INTO %s (
+				event_id, event_type, payload, status,
+				created_at, available_at, delivered_at, updated_at, locked_at,
+				locked_by, attempts
+
+			) VALUES ($1, 'test.event', '{}', $2, $3, $4, $5, $6, $7, $8, $9)`, tableName)
+
+	_, err := pool.Exec(ctx, query,
+		opts.ID, opts.Status,
+		opts.CreatedAt, opts.AvailableAt, opts.DeliveredAt, opts.UpdatedAt, opts.LockedAt,
+		opts.LockedBy, opts.Attempts,
+	)
+	if err != nil {
+		panic(fmt.Sprintf("failed to seed postgres: %v", err))
+	}
 }

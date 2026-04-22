@@ -35,6 +35,7 @@ export default defineConfig({
                         { label: 'Maintenance', link: '/guides/maintenance' },
                         { label: 'Kafka', link: '/guides/kafka' },
                         { label: 'Nats', link: '/guides/nats' },
+                        { label: 'Redis', link: '/guides/redis' },
                     ],
                 },
                 {

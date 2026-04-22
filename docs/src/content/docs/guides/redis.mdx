@@ -1,0 +1,40 @@
+---
+title: Redis Integration
+description: How to configure Open Outbox Relay for Redis Streams publishing.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+Open Outbox Relay supports **Redis Streams** as a high-performance, low-latency alternative for event egress. This is ideal for internal microservices communication where Redis is already part of your infrastructure.
+
+## Core Configuration
+
+To enable the Redis publisher, set the following environment variables.
+
+| Variable | Description | Example |
+| :--- | :--- | :--- |
+| `PUBLISHER_TYPE` | Must be set to `redis`. | `redis` |
+| `PUBLISHER_URL` | The Redis connection string (supports redis:// and rediss://). | `redis://localhost:6379` |
+| `REDIS_WRITE_TIMEOUT` | Max time to wait for Redis to acknowledge the write. | `1s` |
+| `REDIS_CONNECTION_TIMEOUT` | Max time to wait for the redis client to connect to the Redis server | `5s` |
+
+---
+
+## How it Works
+
+The Redis publisher uses the `XADD` command to push events into Streams. Unlike NATS or Kafka,
+Redis Streams are **automatically created** upon the first write, so no manual provisioning of streams is required.
+
+### Stream Naming
+The Relay uses the `event_type` column from your outbox table as the **Stream Key**. For example:
+- If `event_type` = `openoutbox.events.v1`, the data is written to a Redis Stream of the same name.
+
+### Data Mapping
+The Postgres event columns are mapped to Redis hash fields within the stream entry:
+
+| Redis Field | Description |
+| :--- | :--- |
+| `id` | The original UUID from the database. |
+| `payload` | The event body (JSON or binary). |
+| `partition_key` | The key used for consumer-side ordering. |
+| `h:*` | Metadata/Headers are prefixed with `h:` (e.g., `h:trace_id`). |

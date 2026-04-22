@@ -151,6 +151,41 @@ In order to use Kafka as the publisher:
 > If you prefer a graphical interface for inspecting messages, run
 > `make up-kafka-ui` and visit [http://localhost:8081](http://localhost:8081)
 
+### Using Redis publisher
+
+In order to use Redis as the publisher:
+
+1. **Update the `.env` file**:
+
+    ```bash
+    PUBLISHER_TYPE=redis
+    PUBLISHER_URL=redis://localhost:6379
+    ```
+
+2. **Ensure Redis service is running** in docker-compose:
+
+    ```bash
+    make up-redis
+    ```
+
+3. **Run the producer** to generate test events:
+
+    ```bash
+    make produce
+    ```
+
+4. **Run the relay** in another terminal:
+
+    ```bash
+    make run
+    ```
+
+5. **Monitor the redis stream** to view published messages:
+
+    ```bash
+    make redis-tail
+    ```
+
 ## Contributing to Documentation
 
 Our documentation is powered by **Starlight** and is located in the `/docs` directory.
@@ -304,6 +339,15 @@ NATS stream and topic names.
 | `make nats-setup` | Create the JetStream stream and bind the subject pattern. |
 | `make nats-view` | View messages currently in the JetStream. |
 | `make nats-info` | Show detailed metadata and sequence numbers for the stream. |
+
+### Redis Management
+
+commands required for working with Redis in local development. These commands
+use `LOCAL_TEST_TOPIC` environment variables for the Redis stream name.
+
+| Command | Description |
+| :--- | :--- |
+| `make redis-tail` | Tail Redis Stream events in real-time. |
 
 ### Kafka Management
 

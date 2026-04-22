@@ -2,11 +2,11 @@ package publishers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/open-outbox/relay/internal/relay"
@@ -22,16 +22,15 @@ type Redis struct {
 // NewRedis establishes a connection to a Redis server.
 // It validates the connection with a Ping before returning.
 // It accepts redis URLs like "redis://<user>:<pass>@localhost:6379/0" .
-func NewRedis(url string) (*Redis, error) {
-	opts, err := redis.ParseURL(strings.TrimPrefix(url, "redis://"))
+func NewRedis(url string, connectionTimeout time.Duration) (*Redis, error) {
+	opts, err := redis.ParseURL(url)
 	if err != nil {
 		return nil, fmt.Errorf("invalid redis url: %w", err)
 	}
 
 	client := redis.NewClient(opts)
 
-	//TODO: Configure the timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
 	defer cancel()
 
 	if err := client.Ping(ctx).Err(); err != nil {
@@ -48,13 +47,33 @@ func NewRedis(url string) (*Redis, error) {
 // If publishing fails, it classifies the error as retryable if it indicates
 // a transient issue like network disruption or a cluster resharding event.
 func (r *Redis) Publish(ctx context.Context, event relay.Event) error {
+	values := map[string]interface{}{
+		"id":      event.ID.String(),
+		"payload": event.Payload,
+	}
+
+	if pkey := event.GetPartitionKey(); pkey != "" {
+		values["partition_key"] = pkey
+	}
+
+	if len(event.Headers) > 0 {
+		var hMap map[string]string
+		if err := json.Unmarshal(event.Headers, &hMap); err != nil {
+			return &relay.PublishError{
+				Err:         fmt.Errorf("invalid headers json: %w", err),
+				IsRetryable: false,
+				Code:        "INVALID_HEADERS",
+			}
+		}
+		for k, v := range hMap {
+			// Prefixing with 'h:'
+			values["h:"+k] = v
+		}
+	}
 
 	err := r.client.XAdd(ctx, &redis.XAddArgs{
 		Stream: event.Type,
-		Values: map[string]interface{}{
-			"id":      event.ID.String(),
-			"payload": event.Payload,
-		},
+		Values: values,
 	}).Err()
 
 	if err != nil {

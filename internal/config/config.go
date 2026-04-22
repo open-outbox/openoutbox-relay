@@ -107,6 +107,11 @@ type Config struct {
 	//	Default: "5s"
 	NatsPublishTimeout time.Duration `mapstructure:"NATS_PUBLISH_TIMEOUT"`
 
+	// RedisConnectionTimeout is the maximum time to wait for the redis client to connect to the
+	// redis server.
+	//	Default: "5s"
+	RedisConnectionTimeout time.Duration `mapstructure:"REDIS_CONNECTION_TIMEOUT"`
+
 	// KafkaMaxAttempts is the number of write attempts...
 	//	Default: 5
 	KafkaMaxAttempts int `mapstructure:"KAFKA_MAX_ATTEMPTS"`
@@ -196,6 +201,9 @@ func Load() (*Config, error) {
 
 	//Nats Relay-Optimized Defaults
 	v.SetDefault("NATS_PUBLISH_TIMEOUT", "5s")
+
+	//Redis Relay-Optimized Defaults
+	v.SetDefault("REDIS_CONNECTION_TIMEOUT", "5s")
 
 	// Kafka Relay-Optimized Defaults
 	// We set KAFKA_BATCH_SIZE to 1. Since our Relay Engine already batches

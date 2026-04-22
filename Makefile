@@ -154,6 +154,14 @@ nats-info: ## Show detailed metadata and sequence numbers for the stream
 	docker-compose -f $(COMPOSE_FILE) exec nats-box nats -s $(NATS_URL) stream info $(NATS_STREAM)
 
 # ==========================================
+# Redis Management
+# ==========================================
+redis-tail: ## Tail Redis Stream events in real-time
+	@echo "Tailing Redis stream: $(TOPIC_NAME)..."
+	@while true; do \
+		docker-compose -f $(COMPOSE_FILE) exec -T redis redis-cli XREAD BLOCK 0 STREAMS $(TOPIC_NAME) $$; \
+	done
+# ==========================================
 # Kafka Management
 # ==========================================
 

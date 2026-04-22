@@ -19,6 +19,8 @@ The Open Outbox Relay is evolving from a robust core into a high-performance, un
 * **Redis Integration:** Adding Redis (Streams/Pub-Sub) as a high-speed storage and distribution option.
 * **Webhook Relay:** Direct **HTTP/Webhook** support to trigger external APIs directly from the outbox.
 * **Enterprise Config:** Enable remote configuration providers for **Consul** and **Etcd**.
+* **Parallet Publishing** Enable parallet publishing for high latency I/O e.g. **Web Hooks**.
+* **Batch Publishing** Enable batch publishing where supported by the broker.
 
 ## Phase 3: Enterprise Hardening & Scale
 

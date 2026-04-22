@@ -104,13 +104,8 @@ func TestRedis_PublisherErrorHandling(t *testing.T) {
 	t.Setenv("PUBLISHER_TYPE", "redis")
 	t.Setenv("PUBLISHER_URL", redisUrl)
 	t.Setenv("POLL_INTERVAL", "100ms")
-	t.Setenv("LEASE_TIMEOUT", "10s")
-
-	// Insert an event
-	eventID := uuid.New()
-	_, err = db.Exec(`INSERT INTO openoutbox_events (event_id, event_type, payload, status)
-                       VALUES ($1, 'sad.path.stream', '{}', 'PENDING')`, eventID)
-	require.NoError(t, err)
+	t.Setenv("LEASE_TIMEOUT", "1m")
+	t.Setenv("REDIS_WRITE_TIMEOUT", "100ms")
 
 	// Build and Start Engine
 	di, err := container.BuildContainer(ctx)
@@ -123,9 +118,15 @@ func TestRedis_PublisherErrorHandling(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// KILL REDIS immediately before starting the engine
+	// KILL REDIS immediately after starting the engine
 	// This ensures the first publish attempt fails.
 	err = redisContainer.Terminate(ctxBG)
+	require.NoError(t, err)
+
+	// Insert an event
+	eventID := uuid.New()
+	_, err = db.Exec(`INSERT INTO openoutbox_events (event_id, event_type, payload, status)
+                       VALUES ($1, 'sad.path.stream', '{}', 'PENDING')`, eventID)
 	require.NoError(t, err)
 
 	// ASSERTION: The engine should increment 'attempts'
@@ -139,4 +140,5 @@ func TestRedis_PublisherErrorHandling(t *testing.T) {
 		// We just want to see that the engine managed to write back 'attempts = 1'
 		return err == nil && attempts > 0
 	}, 5*time.Second, 200*time.Millisecond, "Engine should record failure when Redis is unreachable")
+
 }

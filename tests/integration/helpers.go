@@ -16,12 +16,14 @@ import (
 	dockercontainer "github.com/moby/moby/api/types/container"
 	nats_go "github.com/nats-io/nats.go"
 	"github.com/open-outbox/relay/internal/relay"
+	redis_go "github.com/redis/go-redis/v9"
 	kafka_go "github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/kafka"
 	"github.com/testcontainers/testcontainers-go/modules/nats"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/modules/redis"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
@@ -107,6 +109,39 @@ func setupNats(t *testing.T) (*nats_go.Conn, string) {
 	require.NoError(t, err)
 
 	return nc, url
+}
+
+func setupRedis(t *testing.T) (*redis_go.Client, string) {
+	t.Helper()
+	ctx := context.Background()
+
+	// Start Redis Container
+	redisContainer, err := redis.Run(ctx, "redis:7-alpine")
+	require.NoError(t, err)
+
+	// Ensure cleanup
+	t.Cleanup(func() {
+		if err := redisContainer.Terminate(context.Background()); err != nil {
+			t.Logf("failed to terminate container: %v", err)
+		}
+	})
+
+	endpoint, err := redisContainer.Endpoint(ctx, "")
+	require.NoError(t, err)
+
+	// Format URL for the publisher
+	redisUrl := "redis://" + endpoint
+
+	// Create a client for the test to verify results
+	opts, err := redis_go.ParseURL(redisUrl)
+	require.NoError(t, err)
+
+	client := redis_go.NewClient(opts)
+
+	// Quick ping to ensure it's ready
+	require.NoError(t, client.Ping(ctx).Err())
+
+	return client, redisUrl
 }
 
 func setupKafka(t *testing.T, topic string) string {

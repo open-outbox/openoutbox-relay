@@ -89,6 +89,16 @@ test-all: # Runs all tests (Unit + Integration) with race detection
 test-clean: # Cleans the Go test cache to ensure a fresh execution of all suites
 	go clean -testcache
 
+test-cover: # Runs all tests and generates a consolidated coverage report
+	go test -v -race -count=1 -tags=integration \
+		-coverprofile=coverage.out \
+		-coverpkg=./internal/... \
+		./...
+	@echo "\n--- Coverage Summary ---"
+	@go tool cover -func=coverage.out
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "\nDetailed HTML report generated at coverage.html"
+
 # ==========================================
 # Infrastructure (Docker)
 # ==========================================

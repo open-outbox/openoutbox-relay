@@ -35,6 +35,17 @@ jobs:
           make lint
           git diff --exit-code || (echo "Linting check failed. Run 'make lint' locally and push." && exit 1)
 
-      - name: Run Full Test Suite
-        # Runs unit + integration tests (via testcontainers) with the race detector
-        run: make test-all
+      - name: Run Full Test Suite with Coverage
+        env:
+            OTEL_TRACES_EXPORTER: none
+            OTEL_METRICS_EXPORTER: none
+        # Runs unit + integration tests (via testcontainers) with the race detector amd coverage
+        run: make test-cover
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.out
+          slug: open-outbox/relay
+          fail_ci_if_error: true

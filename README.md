@@ -1,3 +1,21 @@
+<p align="center">
+  <a href="https://github.com/open-outbox/relay"><img src="./docs/src/assets/logo.svg" width="250" alt="Open Outbox Relay"></a>
+</p>
+<p align="center">
+    <em>High-performance, reliable Transactional Outbox relay for Go.</em>
+</p>
+<p align="center">
+<a href="https://github.com/open-outbox/relay/actions/workflows/ci.yml">
+    <img src="https://github.com/open-outbox/relay/actions/workflows/ci.yml/badge.svg" alt="Test">
+</a>
+<a href="https://codecov.io/gh/open-outbox/relay">
+    <img src="https://codecov.io/gh/open-outbox/relay/branch/main/graph/badge.svg" alt="Coverage">
+</a>
+<a href="https://pkg.go.dev/github.com/open-outbox/relay">
+    <img src="https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white" alt="Go Reference">
+</a>
+</p>
+
 # Open Outbox Relay
 
 **Open Outbox Relay** is the official reference implementation of the [Open Outbox Specification](https://github.com/open-outbox/openoutbox-spec).

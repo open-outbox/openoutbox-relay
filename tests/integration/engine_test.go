@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -290,4 +291,60 @@ func TestEngine_Reaper_LockTheftPrevention(t *testing.T) {
 		*currentLock,
 		"The new worker must still own the lock; the old worker's update must have been ignored",
 	)
+}
+
+func TestEngine_EmptyStorage_RespectsPollInterval(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	store := new(relay.MockStorage)
+	pub := new(relay.MockPublisher)
+
+	// 1. USE AN ATOMIC COUNTER
+	var callCount int32
+	store.On("ClaimBatch", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return([]relay.Event{}, nil).
+		Run(func(args mock.Arguments) {
+			atomic.AddInt32(&callCount, 1)
+		})
+
+	// Setup other mocks as before...
+	store.On("ReapExpiredLeases", mock.Anything, mock.Anything, mock.Anything).
+		Return(int64(0), nil).
+		Maybe()
+	store.On("GetStats", mock.Anything).Return(relay.Stats{}, nil).Maybe()
+
+	pollInterval := 500 * time.Millisecond
+	testDuration := 2 * time.Second
+
+	params := relay.EngineParams{
+		RelayID:      "test-quiet-worker",
+		Interval:     pollInterval,
+		BatchSize:    10,
+		LeaseTimeout: 5 * time.Minute,
+	}
+
+	tel, _ := relay.CreateNoopTelemetry()
+	engine, err := relay.NewEngine(store, pub, params, tel)
+	require.NoError(t, err)
+
+	// 2. RUN
+	go func() {
+		_ = engine.Start(ctx)
+	}()
+
+	time.Sleep(testDuration)
+	cancel()
+
+	// WAIT A MOMENT
+	// Give the goroutines a tiny window to actually exit before we read the counter
+	time.Sleep(50 * time.Millisecond)
+
+	// ASSERTION
+	finalCalls := atomic.LoadInt32(&callCount)
+
+	// Expected: 2000ms / 500ms = 4 calls.
+	// (Plus potentially 1 for the immediate start)
+	assert.GreaterOrEqual(t, int(finalCalls), 4, "Engine is polling too slowly")
+	assert.LessOrEqual(t, int(finalCalls), 6, "Engine is busy-spinning (polling too fast)")
 }

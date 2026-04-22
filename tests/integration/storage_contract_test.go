@@ -240,7 +240,7 @@ func runStorageContractTest(
 			ID:       eventID,
 			Status:   relay.StatusDelivering,
 			LockedAt: ptr(time.Now().Add(-20 * time.Minute)),
-			LockedBy: "crashed-worker",
+			LockedBy: ptr("crashed-worker"),
 		})
 
 		// Run reaper with a 5-minute timeout threshold

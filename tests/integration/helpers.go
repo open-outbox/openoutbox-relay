@@ -33,7 +33,7 @@ type SeedOptions struct {
 	DeliveredAt *time.Time
 	UpdatedAt   *time.Time
 	LockedAt    *time.Time
-	LockedBy    string
+	LockedBy    *string
 	Attempts    int
 }
 

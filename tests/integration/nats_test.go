@@ -109,7 +109,16 @@ func TestNats_PublisherErrorHandling(t *testing.T) {
                        VALUES ($1, 'openoutbox.events.v1', '{}', 'PENDING')`, eventID)
 	require.NoError(t, err)
 
-	di.Invoke(func(engine *relay.Engine) { go engine.Start(ctx) })
+	// Start the Engine through DI
+	err = di.Invoke(func(engine *relay.Engine) {
+		go func() {
+			if err := engine.Start(ctx); err != nil {
+				// We expect context canceled error on cleanup
+				t.Logf("Engine stopped: %v", err)
+			}
+		}()
+	})
+	require.NoError(t, err)
 
 	// ASSERTION: The engine should increment 'attempts' because NATS returned an error
 	assert.Eventually(t, func() bool {
@@ -119,6 +128,6 @@ func TestNats_PublisherErrorHandling(t *testing.T) {
 			Scan(&attempts, &status)
 
 		// We want to see attempts > 0 and status still PENDING (or DELIVERING)
-		return err == nil && attempts > 0
+		return err == nil && attempts > 0 && status != "DELIVERED"
 	}, 5*time.Second, 200*time.Millisecond, "Engine should record failure when NATS reject publish")
 }

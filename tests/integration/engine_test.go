@@ -1,4 +1,4 @@
-//go build: integration
+//go:build integration
 
 package integration
 
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/open-outbox/relay/internal/container"
 	"github.com/open-outbox/relay/internal/relay"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -199,4 +200,94 @@ func TestEngine_BacklogDrain_LoopsImmediately(t *testing.T) {
 
 	assert.True(t, store.AssertExpectations(t), "Engine did not drain the backlog immediately")
 	cancel()
+}
+
+func TestEngine_Reaper_LockTheftPrevention(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	db, pgConnStr := setupTestPostgres(t)
+
+	oldWorkerID := "slow-worker-99"
+	newWorkerID := "fast-worker-01" // This is what our Engine will use
+	eventID := uuid.New()
+
+	// 1. CONFIG
+	t.Setenv("RELAY_ID", newWorkerID)
+	t.Setenv("LEASE_TIMEOUT", "5s")
+	t.Setenv("POLL_INTERVAL", "100ms")
+	t.Setenv("STORAGE_URL", pgConnStr)
+
+	// Point Kafka to a "Slow" address
+	// We use a real IP that won't respond (like 192.0.2.1) or just a closed port
+	// This ensures the WriteMessages call hangs for exactly the timeout duration.
+	t.Setenv("PUBLISHER_TYPE", "kafka")
+	t.Setenv("PUBLISHER_URL", "10.255.255.1:9092")
+	t.Setenv("KAFKA_WRITE_TIMEOUT", "10s") // THE TRAP: This gives us a 5s window
+
+	// 2. SEED: An event already "DELIVERING" by the OLD zombie worker
+	// It's already expired (locked 5 mins ago)
+	_, err := db.Exec(`
+        INSERT INTO openoutbox_events (
+            event_id, event_type, payload, status, locked_by, locked_at, available_at
+        ) VALUES ($1, 'test.event', '{}', 'DELIVERING', $2, $3, $4)`,
+		eventID, oldWorkerID, time.Now().Add(-5*time.Minute), time.Now().Add(-10*time.Minute))
+	require.NoError(t, err)
+
+	di, _ := container.BuildContainer(ctx)
+
+	// 3. START ENGINE
+	// Sequence of events that will happen automatically:
+	// A) Reaper runs: Sees event, sets status='DELIVERING', locked_by=oldWorkerID,
+	// and reaps it
+	// B) Worker runs: Sees event is PENDING and available, claims it.
+	//    Sets status='DELIVERING', locked_by='fast-worker-01'
+	// C) The topic doesn't exists, so the fast worker will move the event back to PENDING
+	di.Invoke(func(engine *relay.Engine) {
+		go engine.Start(ctx)
+	})
+
+	// STEP A: The Engine reaps and then CLAIMS the event.
+	// Because WriteTimeout is 5s, the engine will be "stuck" in the Publish() call.
+	// While it's stuck, it holds the lock 'fast-worker-01'.
+	assert.Eventually(t, func() bool {
+		var lockedBy *string
+		var status string
+		_ = db.QueryRow("SELECT status, locked_by FROM openoutbox_events WHERE event_id = $1", eventID).
+			Scan(&status, &lockedBy)
+
+		// We caught it! The new worker has the lock and hasn't failed yet.
+		return status == "DELIVERING" && lockedBy != nil && *lockedBy == "fast-worker-01"
+	}, 5*time.Second, 100*time.Millisecond)
+
+	// THE ZOMBIE ATTACK
+	// Now, the OLD worker (slow-worker-99) finally finishes its "slow" publish.
+	// It tries to mark the event as DELIVERED using its own ID.
+	di.Invoke(func(store relay.Storage) {
+		// We simulate the old worker's final DB call
+		err := store.MarkDeliveredBatch(ctx, []uuid.UUID{eventID}, oldWorkerID)
+		require.NoError(t, err)
+	})
+
+	// FINAL INTEGRITY CHECK
+	var status string
+	var currentLock *string
+	err = db.QueryRow("SELECT status, locked_by FROM openoutbox_events WHERE event_id = $1", eventID).
+		Scan(&status, &currentLock)
+	require.NoError(t, err)
+
+	// Even though the old worker called MarkDelivered, the status should
+	// NOT be DELIVERED because the 'WHERE locked_by = oldWorkerID' failed.
+	// It should still be 'DELIVERING' (held by the newWorkerID) or
+	// eventually 'PENDING' (if it's reaped again).
+	assert.NotEqual(t, "DELIVERED", status, "Event should not be in DELIVERED")
+	assert.Equal(t, "DELIVERING", status, "Event should be in DELIVERING")
+
+	// The most important part: The old worker couldn't have cleared the new worker's lock
+	assert.Equal(
+		t,
+		newWorkerID,
+		*currentLock,
+		"The new worker must still own the lock; the old worker's update must have been ignored",
+	)
 }

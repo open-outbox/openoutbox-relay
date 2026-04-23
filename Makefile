@@ -4,6 +4,10 @@ ifneq (,$(wildcard ./.env))
     export
 endif
 
+FILTERED_ARGS := $(filter-out --,$(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS)))
+%:
+	@:
+
 # --- Configuration & Defaults ---
 BINARY_NAME         := relay
 CLI_BINARY_NAME		:= cli
@@ -34,8 +38,11 @@ help: ## Display this help message
 run: ## Run the Relay service locally using Go
 	go run $(MAIN_PACKAGE)
 
-produce: ## Run the Producer to generate dummy events for testing
-	go run $(PRODUCER_PKG)
+produce-seed: ## Run the Producer to generate seed dummy events for testing
+	go run $(PRODUCER_PKG) seed $(FILTERED_ARGS)
+
+produce-bench: ## Run the Producer in benchmark mode for performance testing
+	go run $(PRODUCER_PKG) bench $(FILTERED_ARGS)
 
 build: ## Compile the Relay into a binary in the bin/ directory
 	mkdir -p bin
@@ -59,7 +66,6 @@ gen-api: ## Generates the api reference docs into /docs.
   		--output 'docs/src/content/docs/reference/api/{{.ImportPath}}.md' \
   		./...
 	find docs/src/content/docs/reference/api -name "*.md" -exec sh -c 'mv "$$1" "$${1%.md}.mdx"' _ {} \;
-
 
 # ==========================================
 # Quality & Linting

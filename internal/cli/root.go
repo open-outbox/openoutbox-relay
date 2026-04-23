@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -34,7 +34,7 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-// Executes the requested cli command using Cobra
+// Execute runs the requested CLI command using Cobra.
 func Execute(ctx context.Context) error {
 	return rootCmd.ExecuteContext(ctx)
 }

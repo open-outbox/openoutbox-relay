@@ -213,17 +213,29 @@ func sendBatch(
 
 	batch := &pgx.Batch{}
 	for i := 0; i < currentSize; i++ { // Use the parameter, not the global
-		userID := rand.Intn(100000)
-		payload := fmt.Sprintf(`{"user_id": %d, "email": "user-%d@example.com"}`, userID, userID)
+		select {
+		case <-ctx.Done():
+			// Stop producing because SIGTERM/Interrupt was received
+			fmt.Println("Producer received shutdown signal, stopping batch...")
+			return ctx.Err()
+		default:
+			// Continue with the production
+			userID := rand.Intn(100000)
+			payload := fmt.Sprintf(
+				`{"user_id": %d, "email": "user-%d@example.com"}`,
+				userID,
+				userID,
+			)
 
-		batch.Queue(
-			query,
-			uuid.New(),
-			topic,
-			fmt.Sprintf("user-%d", userID),
-			[]byte(payload),
-			map[string]any{"trace_id": uuid.New().String()},
-		)
+			batch.Queue(
+				query,
+				uuid.New(),
+				topic,
+				fmt.Sprintf("user-%d", userID),
+				[]byte(payload),
+				map[string]any{"trace_id": uuid.New().String()},
+			)
+		}
 	}
 
 	return pool.SendBatch(ctx, batch).Close()

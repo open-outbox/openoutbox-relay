@@ -498,7 +498,12 @@ func (e *Engine) updateBacklogMetrics(ctx context.Context) {
 		return
 	}
 
-	e.metrics.PendingGauge.Record(ctx, stats.PendingCount)
+	e.metrics.PendingGauge.Record(ctx, stats.PendingCount,
+		metric.WithAttributes(attribute.String("state", "new")))
+
+	e.metrics.PendingGauge.Record(ctx, stats.RetryingCount,
+		metric.WithAttributes(attribute.String("state", "retrying")))
+
 	e.metrics.OldestPendingSeconds.Record(ctx, stats.OldestAgeSec)
 }
 

@@ -104,7 +104,8 @@ const (
     `
 	sqlStats = `
         SELECT
-            COALESCE((SELECT count(*) FROM {{TABLE}} WHERE status=$1), 0)::bigint,
+            COALESCE((SELECT count(*) FROM {{TABLE}} WHERE status=$1 AND attempts = 0), 0)::bigint,
+            COALESCE((SELECT count(*) FROM {{TABLE}} WHERE status=$1 AND attempts > 0), 0)::bigint,
             COALESCE(EXTRACT(EPOCH FROM (now() - (SELECT min(created_at)
 				FROM {{TABLE}} WHERE status=$1))), 0)::bigint
 	`
@@ -331,6 +332,7 @@ func (p *Postgres) GetStats(ctx context.Context) (relay.Stats, error) {
 
 	err := p.pool.QueryRow(ctx, p.queryStats, relay.StatusPending).Scan(
 		&stats.PendingCount,
+		&stats.RetryingCount,
 		&stats.OldestAgeSec,
 	)
 

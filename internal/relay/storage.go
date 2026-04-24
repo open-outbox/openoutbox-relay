@@ -55,6 +55,9 @@ type Storage interface {
 type Stats struct {
 	// PendingCount is the total number of events currently in 'PENDING' status.
 	PendingCount int64 `json:"pending_count"`
+	// RetryingCount is the number of events in 'PENDING' status that have
+	// failed at least once (attempts > 0).
+	RetryingCount int64 `json:"retrying_count"`
 	// OldestAgeSec is the age in seconds of the oldest event waiting to be processed.
 	OldestAgeSec int64 `json:"oldest_age_sec"`
 }

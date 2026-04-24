@@ -127,9 +127,13 @@ CREATE INDEX IF NOT EXISTS idx_openoutbox_stuck_leases
 -- -----------------------------------------------------------------------------
 
 -- Optimizes the COUNT query for pending messages.
+-- We use include instead of adding the attempts to
+-- the index to make sure updates remain HOT (Heap Only Tuple),
+-- preventing index bloat and locking during high-frequency retries.
 CREATE INDEX IF NOT EXISTS idx_openoutbox_metrics_count
-    ON public.openoutbox_events (status)
-    WHERE status = 'PENDING';
+	ON public.openoutbox_events (status)
+	INCLUDE (attempts)
+	WHERE status = 'PENDING';
 
 -- Optimizes the "Oldest Age" query by allowing the DB to find the minimum
 -- created_at within the PENDING subset.

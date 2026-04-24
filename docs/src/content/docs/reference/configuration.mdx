@@ -398,6 +398,28 @@ Defines the destination for trace data. Supported options: `otlp`, `console`, or
 
 ---
 
+### `OTEL_METRIC_EXPORT_INTERVAL`
+
+<Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />
+
+**Default**: `60000`
+
+The interval (in milliseconds) between metric flushes.
+
+<Aside type="note" title="Benchmarking">
+For high-resolution benchmarking, set this to 1000 or 5000
+to ensure Prometheus rate() functions have enough data points to render smooth lines.
+</Aside>
+
+<Aside type="caution" title="Warning">
+In a production environment, use the default value or a higher number.
+Frequent metric exports (e.g., every 1s) can increase CPU overhead on the Relay and
+significantly increase the network traffic and ingestion load on your OpenTelemetry
+Collector and Prometheus instance.
+</Aside>
+
+---
+
 ### `OTEL_METRICS_EXPORTER`
 
 <Badge variant="note" text="Optional" /> <Badge variant="default" text="String" />

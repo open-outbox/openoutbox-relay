@@ -7,7 +7,7 @@ volumes:
 services:
 
   relay:
-    build: 
+    build:
       context: ..
       dockerfile: deployments/Dockerfile
     image: openoutbox/relay:latest
@@ -26,12 +26,13 @@ services:
     build:
       context: ..
       dockerfile: ./benchmark/Dockerfile.producer
-    profiles: ["tools"]      
+    profiles: ["tools"]
     env_file:
       - .env
-  
+
   postgres:
     image: postgres:16
+    shm_size: '4gb'
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
@@ -53,10 +54,18 @@ services:
   nats:
     image: nats:2.10-alpine
     profiles: ["nats"]
-    ports:
-      - "4222:4222"
-      - "8222:8222"
-    command: ["-js", "-m", "8222"]
+    command:
+      - "-js"
+      - "-m"
+      - "8222"
+      - "--store_dir=/data"
+    mem_limit: 8GB
+    volumes:
+      - nats_data:/data
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8222/varz"]
       interval: 2s
@@ -115,9 +124,9 @@ services:
       - kafka
     entrypoint: [ "/bin/sh", "-c" ]
     command: >
-      "echo 'Waiting for Kafka...' && 
-      until /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9094 --list > /dev/null 2>&1; do sleep 1; done && 
-      /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9094 --topic openoutbox.events.v1 --partitions 3 --replication-factor 1 && 
+      "echo 'Waiting for Kafka...' &&
+      until /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9094 --list > /dev/null 2>&1; do sleep 1; done &&
+      /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9094 --topic openoutbox.events.v1 --partitions 3 --replication-factor 1 &&
       echo 'Topic setup complete.'"
 
   redis:
@@ -157,7 +166,7 @@ services:
       - 8889:8889 # Prometheus exporter metrics
       - 4317:4317 # OTLP gRPC receiver
       - 4318:4318 # OTLP http receiver
-  
+
   grafana:
     image: grafana/grafana:latest
     container_name: grafana

@@ -107,6 +107,9 @@ services:
       - 4318:4318 # OTLP http receiver
   grafana:
     image: grafana/grafana:latest
+    volumes:
+      - ../configs/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ../configs/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
     container_name: grafana
     ports:
       - "3000:3000"

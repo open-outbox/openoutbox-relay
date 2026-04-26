@@ -87,7 +87,6 @@ func (ip *InstrumentedPublisher) Publish(ctx context.Context, event relay.Event)
 	// Record latency with BOTH type and status
 	ip.metrics.PublisherLatency.Record(ctx, time.Since(start).Seconds(),
 		metric.WithAttributes(
-			attribute.String("type", event.Type),
 			attribute.String("status", status),
 			attribute.String("relay_id", ip.relayID),
 		))

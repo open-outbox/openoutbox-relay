@@ -418,7 +418,6 @@ func (e *Engine) publishOnByOne(
 				1,
 				metric.WithAttributes(
 					attribute.String("status", "failed"),
-					attribute.String("type", event.Type),
 				),
 			)
 
@@ -429,7 +428,6 @@ func (e *Engine) publishOnByOne(
 
 		e.metrics.EndToEndLatency.Record(ctx, time.Since(event.CreatedAt).Seconds(),
 			metric.WithAttributes(
-				attribute.String("type", event.Type),
 				attribute.String("relay_id", e.relayID),
 			),
 		)
@@ -438,7 +436,6 @@ func (e *Engine) publishOnByOne(
 			1,
 			metric.WithAttributes(
 				attribute.String("status", "success"),
-				attribute.String("type", event.Type),
 				attribute.String("relay_id", e.relayID),
 			),
 		)
@@ -478,8 +475,7 @@ func (e *Engine) publishOnByOne(
 // 	successIDs := make([]uuid.UUID, 0, len(events))
 // 	for _, ev := range events {
 // 		successIDs = append(successIDs, ev.ID)
-// 		e.metrics.EndToEndLatency.Record(ctx, time.Since(ev.CreatedAt).Seconds(),
-// 			metric.WithAttributes(attribute.String("type", ev.Type)))
+// 		e.metrics.EndToEndLatency.Record(ctx, time.Since(ev.CreatedAt).Seconds())
 // 	}
 
 // 	e.metrics.EventsTotal.Add(ctx, int64(len(events)),

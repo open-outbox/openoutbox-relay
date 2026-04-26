@@ -18,8 +18,11 @@ import (
 )
 
 const (
-	defaultWatchInterval       = 30 * time.Second
-	defaultHealthCheckInterval = 5 * time.Second
+	defaultPollInterval                  = 500 * time.Millisecond
+	defaultLeaseTimeout                  = 3 * time.Minute
+	defaultWatchInterval                 = 30 * time.Second
+	defaultHealthCheckInterval           = 5 * time.Second
+	defaultPublisherConnectRetryInterval = 5 * time.Second
 )
 
 // State represents the current operational state of the engine.
@@ -96,8 +99,24 @@ func NewEngine(
 		return nil, fmt.Errorf("engine cannot poll with batch size 0")
 	}
 
+	if params.Interval <= 0 {
+		params.Interval = defaultPollInterval
+	}
+
+	if params.LeaseTimeout <= 0 {
+		params.LeaseTimeout = defaultLeaseTimeout
+	}
+
 	if params.HealthCheckInterval <= 0 {
 		params.HealthCheckInterval = defaultHealthCheckInterval
+	}
+
+	if params.PublisherConnectRetryInterval <= 0 {
+		params.PublisherConnectRetryInterval = defaultPublisherConnectRetryInterval
+	}
+
+	if params.ReapBatchSize <= 0 {
+		params.ReapBatchSize = params.BatchSize
 	}
 
 	return &Engine{

@@ -378,16 +378,13 @@ func (e *Engine) publishOnByOne(
 				return nil, nil, err
 			}
 
-			failedEvent, errorCode := e.assessFailure(event, err)
-			failedEvents = append(failedEvents, failedEvent)
+			failedEvents = append(failedEvents, e.assessFailure(event, err))
 			e.metrics.EventsTotal.Add(
 				ctx,
 				1,
 				metric.WithAttributes(
 					attribute.String("status", "failed"),
 					attribute.String("type", event.Type),
-					attribute.String("code", errorCode),
-					attribute.String("relay_id", e.relayID),
 				),
 			)
 
@@ -457,19 +454,14 @@ func (e *Engine) publishOnByOne(
 // 	return successIDs, nil, nil
 // }
 
-func (e *Engine) assessFailure(event Event, publishError error) (FailedEvent, string) {
+func (e *Engine) assessFailure(event Event, publishError error) FailedEvent {
 	nextAttempts := event.Attempts + 1
 	delay, policyAllowsRetry := e.policy.NextBackoff(nextAttempts)
 
 	isRetryable := true
-	errorCode := "UNKNOWN"
-
 	var pErr *PublishError
 	if errors.As(publishError, &pErr) {
 		isRetryable = pErr.IsRetryable
-		if pErr.Code != "" {
-			errorCode = pErr.Code
-		}
 	}
 
 	shouldRetry := policyAllowsRetry && isRetryable
@@ -496,7 +488,7 @@ func (e *Engine) assessFailure(event Event, publishError error) (FailedEvent, st
 		}
 	}
 
-	return result, errorCode
+	return result
 }
 
 func (e *Engine) updateBacklogMetrics(ctx context.Context) {

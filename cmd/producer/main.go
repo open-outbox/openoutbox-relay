@@ -167,7 +167,6 @@ var benchCmd = &cobra.Command{
 	Use:   "bench",
 	Short: "Produce events continuously at a set interval",
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		interval, _ := cmd.Flags().GetDuration("interval")
 		pool, err := pgxpool.New(cmd.Context(), dbURL)
 		if err != nil {
 			return err
@@ -198,7 +197,6 @@ var benchCmd = &cobra.Command{
 }
 
 func init() {
-	benchCmd.Flags().DurationP("interval", "i", time.Second, "Interval between batches")
 	rootCmd.AddCommand(benchCmd)
 }
 

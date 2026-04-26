@@ -16,8 +16,8 @@ This directory contains the official benchmarking rig for the OpenOutbox Relay. 
 Clone the repository and move into the benchmark directory:
 
 ```bash
-git clone [https://github.com/openoutbox/openoutbox.git](https://github.com/openoutbox/openoutbox.git)
-cd openoutbox/relay/benchmark
+git clone https://github.com/open-outbox/relay.git
+cd relay/benchmark
 cp ../.env.example .env
 ```
 
@@ -71,7 +71,35 @@ Modify the `PUBLISHER_TYPE` and `PUBLISHER_URL` based on the broker you want to 
 > bottleneck is likely your database indices or
 > theyour POLL_INTERVAL settings.
 
-### 4. Run the Stack
+### 4. Engine Tuning
+
+Beyond the broker connection strings, you can
+fine-tune the Relay's engine behavior. Adjust these
+in your `.env` file to match your performance
+requirements:
+
+```bash
+# Duration that the relay pause in case of empty batches (When the relay is faster than the producer)
+POLL_INTERVAL=500ms
+
+# Max events to process in a single iteration (Higher = better throughput)
+BATCH_SIZE=1000
+
+# Duration before a "DELIVERING" event is considered stuck/crashed
+LEASE_TIMEOUT=3m
+
+# Number of expired leases to reset per cleanup cycle
+REAP_BATCH_SIZE=100
+
+# Wait time between connection attempts to the broker (NATS/Kafka) during startup
+PUBLISHER_CONNECT_RETRY_INTERVAL=5s
+
+# Frequency of background health probes (determines outage reaction speed)
+HEALTH_CHECK_INTERVAL=5s
+
+```
+
+### 5. Run the Stack
 
 Start the core infrastructure along with the profile for your selected broker:
 
@@ -90,43 +118,44 @@ make bench-nats
 make bench-redis
 ```
 
-> **Note**: The stack automatically handles topic/stream
-> creation via the -setup containers.
+> [!IMPORTANT]
+> **Broker Persistence**: NATS and Kafka topics/streams in this suite are ephemeral
+> and lost on `docker compose down`. If you are testing error rates or recovery by
+> stopping services, always use `make bench-XXX` to restart them. This ensures the
+> `-setup` containers re-provision the necessary topics/streams.
 
-### 5. Start Seeding
+### 6. Start Seeding
 
-Flood the database with events to begin the
-benchmark. You can pass arguments to the producer
-using the -- separator:
+Use the producer tool to flood the database. There are two primary modes for benchmarking:
+
+#### **A. Bulk Seeding (`produce-seed`)**
+
+Injects a fixed number of events and exits. Use this to test how the Relay drains a
+massive, pre-existing backlog.
 
 ```bash
-# produces 100 events every 10ms
+# Example: Inject 200,000 events
+make produce-seed -- --count 200000
+
+**Note**: To see the options for producer commands Use:
+```
+
+* `--count`: Total events to produce (default: 100,000).
+
+* `--batch-size`: Number of events per DB insert transaction (default: 10,000).
+
+#### B. Continuous Benchmarking (produce-bench)
+
+Produces events continuously at a set interval. Use this to measure "Sustained Throughput" and identify the Relay's breaking point.
+
+```bash
+# Example: Produce 100 events every 10ms (approx. 10,000 EPS)
 make produce-bench -- --batch-size 100 --interval 10ms
 ```
 
-or
+* `--interval`: The pause between production batches (default: 1s).
 
-```bash
-# produces 100000 events and stop
-make produce-seed -- --count 100000
-```
-
-**Note**: To see the options for producer commands Use:
-
-```bash
-# See the produce help
-make produce-help
-```
-
-```bash
-# See the produce-bench help
-make produce-bench -- --help
-```
-
-```bash
-# See the produce-seed help
-make produce-seed -- --help
-```
+**Pro-Tip**: You can see all available flags (including --storage-url and --topic) by running make produce-help.
 
 ## Monitoring Results
 
@@ -152,7 +181,14 @@ taking for every batch.
 
 ### Metrics (Grafana)
 
-ToDo
+The benchmark suite includes a pre-provisioned Grafana instance.
+
+1. Open [http://localhost:3000](http://localhost:3000) in your browser.
+2. Navigate to the **Dashboards** section.
+3. Open the **"Open Outbox"** folder.
+4. Select the **"Open Outbox Dashboard"** dashboard.
+
+This dashboard provides real-time visualization of your EPS, Batch Efficiency, and SLO compliance. It is the same dashboard available on [Grafana.com](https://grafana.com/grafana/dashboards/25221).
 
 ## Cleanup
 
@@ -168,3 +204,22 @@ To push for maximum EPS (Events Per Second), try these `.env` adjustments:
 
 * `BATCH_SIZE=1000`: Increases throughput by reducing DB roundtrips.
 * `REAP_BATCH_SIZE=500`: Speeds up recovery of expired leases.
+
+## Scaling: Running Multiple Relays
+
+The OpenOutbox Relay is designed to be horizontally scalable. You can run multiple instances to increase throughput or test high-availability scenarios (e.g., one relay crashing while others continue).
+
+To scale the relay, use the `--scale` flag with Docker Compose:
+
+```bash
+# Example: Run 3 parallel relay instances
+docker compose up -d --scale relay=3
+```
+
+**Important Scaling Notes:**
+
+* **Relay IDs**: Each instance must have a unique identity for the "Claiming" logic to work correctly. In the relay, this is handled automatically via the container's hostname. Make sure not the set the `RELAY_ID` environment variable manually when running multiple instances.
+
+* **Database Load**: While scaling relays increases processing power, it also increases the number of concurrent `SELECT FOR UPDATE` queries on your database. Monitor your DB CPU and Lock contention when scaling beyond 5+ instances.
+
+* **Visualization**: The Grafana dashboard will automatically detect new instances and show them as separate rows in the Relay Operational State (State Timeline) panel.

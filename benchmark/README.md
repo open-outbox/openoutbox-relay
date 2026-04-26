@@ -96,12 +96,23 @@ PUBLISHER_CONNECT_RETRY_INTERVAL=5s
 
 # Frequency of background health probes (determines outage reaction speed)
 HEALTH_CHECK_INTERVAL=5s
-
 ```
 
 ### 5. Run the Stack
 
-Start the core infrastructure along with the profile for your selected broker:
+> Make sure your system has enough memory according
+> to the [./postgres.conf](postgres) config.
+> Otherwise the postgres volume will be created
+> without the required schemas. In this case drop the postgres volume and recreate it after you
+> adjusted your memory setting.
+
+Before running, ensure you build the latest versions of the Relay and Producer images:
+
+```bash
+docker compose build
+```
+
+Then, start the core infrastructure along with the profile for your selected broker:
 
 ```bash
 # Example for Kafka

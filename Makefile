@@ -110,25 +110,25 @@ test-cover: # Runs all tests and generates a consolidated coverage report
 # ==========================================
 
 up: ## Spin up all infrastructure (Postgres, Kafka, NATS, OTel)
-	docker-compose -f $(COMPOSE_FILE) up -d
+	docker compose -f $(COMPOSE_FILE) up -d
 
 up-%: ## Spin up a specific service (e.g., make up-kafka)
-	docker-compose -f $(COMPOSE_FILE) up -d $*
+	docker compose -f $(COMPOSE_FILE) up -d $*
 
 down: ## Shut down all infrastructure and remove networks
-	docker-compose -f $(COMPOSE_FILE) down
+	docker compose -f $(COMPOSE_FILE) down
 
 down-%: ## Stop a specific service (e.g., make down-postgres)
-	docker-compose -f $(COMPOSE_FILE) stop $*
+	docker compose -f $(COMPOSE_FILE) stop $*
 
 logs: ## Follow logs for all running containers
-	docker-compose -f $(COMPOSE_FILE) logs -f
+	docker compose -f $(COMPOSE_FILE) logs -f
 
 logs-%: ## Follow logs for a specific service (e.g., make logs-relay)
-	docker-compose -f $(COMPOSE_FILE) logs -f $*
+	docker compose -f $(COMPOSE_FILE) logs -f $*
 
 ps: ## Show status of all project containers
-	docker-compose -f $(COMPOSE_FILE) ps
+	docker compose -f $(COMPOSE_FILE) ps
 
 # ==========================================
 # Tooling Setup
@@ -154,10 +154,10 @@ nats-setup: ## Create the JetStream stream and bind the subject pattern
 	./scripts/nats/setup-stream.sh $(NATS_URL) $(NATS_STREAM) "$(TOPIC_NAME)"
 
 nats-view: ## View messages currently in the JetStream
-	docker-compose -f $(COMPOSE_FILE) exec nats-box nats -s $(NATS_URL) stream view $(NATS_STREAM)
+	docker compose -f $(COMPOSE_FILE) exec nats-box nats -s $(NATS_URL) stream view $(NATS_STREAM)
 
 nats-info: ## Show detailed metadata and sequence numbers for the stream
-	docker-compose -f $(COMPOSE_FILE) exec nats-box nats -s $(NATS_URL) stream info $(NATS_STREAM)
+	docker compose -f $(COMPOSE_FILE) exec nats-box nats -s $(NATS_URL) stream info $(NATS_STREAM)
 
 # ==========================================
 # Redis Management
@@ -165,7 +165,7 @@ nats-info: ## Show detailed metadata and sequence numbers for the stream
 redis-tail: ## Tail Redis Stream events in real-time
 	@echo "Tailing Redis stream: $(TOPIC_NAME)..."
 	@while true; do \
-		docker-compose -f $(COMPOSE_FILE) exec -T redis redis-cli XREAD BLOCK 0 STREAMS $(TOPIC_NAME) $$; \
+		docker compose -f $(COMPOSE_FILE) exec -T redis redis-cli XREAD BLOCK 0 STREAMS $(TOPIC_NAME) $$; \
 	done
 # ==========================================
 # Kafka Management
@@ -176,16 +176,16 @@ kafka-setup: ## Create the required Kafka topics with 3 partitions
 	./scripts/kafka/setup-topics.sh $(KAFKA_URL) $(TOPIC_NAME) 3
 
 kafka-list: ## List all existing topics in the Kafka cluster
-	docker-compose -f $(COMPOSE_FILE) exec kafka /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server $(KAFKA_URL)
+	docker compose -f $(COMPOSE_FILE) exec kafka /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server $(KAFKA_URL)
 
 kafka-info: ## Deep dive into the configuration of the topic
-	docker-compose -f $(COMPOSE_FILE) exec kafka \
+	docker compose -f $(COMPOSE_FILE) exec kafka \
 	/opt/kafka/bin/kafka-topics.sh --describe \
 	--topic $(TOPIC_NAME) \
 	--bootstrap-server $(KAFKA_URL)
 
 kafka-tail: ## Tail messages from the beginning of the topic in real-time
-	docker-compose -f $(COMPOSE_FILE) exec kafka \
+	docker compose -f $(COMPOSE_FILE) exec kafka \
 	/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server $(KAFKA_URL) --topic $(TOPIC_NAME) --from-beginning
 
 # ==========================================
@@ -199,8 +199,8 @@ test-otel: ## Send a batch of test traces to verify the OTel pipeline
 db-init: ## Detects STORAGE_TYPE and applies the correct SQL schema
 	@echo "Initializing $(DB_TYPE) schema..."
 ifeq ($(DB_TYPE),postgres)
-	docker-compose -f $(COMPOSE_FILE) exec -T postgres psql -U postgres -d postgres < schema/postgres/open-outbox.sql
-	docker-compose -f $(COMPOSE_FILE) exec -T postgres psql -U postgres -d postgres < schema/postgres/maintenance.sql
+	docker compose -f $(COMPOSE_FILE) exec -T postgres psql -U postgres -d postgres < schema/postgres/open-outbox.sql
+	docker compose -f $(COMPOSE_FILE) exec -T postgres psql -U postgres -d postgres < schema/postgres/maintenance.sql
 else
 	@echo "Error: Unsupported STORAGE_TYPE '$(DB_TYPE)'. Please check your .env"
 	@exit 1

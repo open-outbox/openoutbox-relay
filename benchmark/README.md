@@ -146,14 +146,14 @@ massive, pre-existing backlog.
 
 ```bash
 # Example: Inject 200,000 events
-make produce-seed -- --count 200000
-
-**Note**: To see the options for producer commands Use:
+make produce-seed -- --count 200000 --payload-size 200
 ```
 
-* `--count`: Total events to produce (default: 100,000).
+**Note**: To see the options for producer commands Use:
 
-* `--batch-size`: Number of events per DB insert transaction (default: 10,000).
+```bash
+make produce-help
+```
 
 #### B. Continuous Benchmarking (produce-bench)
 

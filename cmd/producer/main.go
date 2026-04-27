@@ -3,9 +3,10 @@ package main
 
 import (
 	"context"
+	"crypto/rand" // Using crypto/rand as requested
 	"fmt"
 	"log"
-	"math/rand"
+	math_rand "math/rand/v2" // Using newer math/rand/v2 for the partition keys
 	"os"
 	"os/signal"
 	"strconv"
@@ -21,12 +22,13 @@ import (
 )
 
 var (
-	// Bound to flags
-	dbURL     string
-	table     string
-	topic     string
-	batchSize int
-	interval  time.Duration
+	dbURL       string
+	table       string
+	topic       string
+	batchSize   int
+	interval    time.Duration
+	seedCount   int
+	payloadSize int
 )
 
 var rootCmd = &cobra.Command{
@@ -37,9 +39,6 @@ var rootCmd = &cobra.Command{
 func init() {
 	_ = godotenv.Load()
 
-	_ = godotenv.Load()
-
-	// Flag for Database
 	rootCmd.PersistentFlags().
 		StringVar(
 			&dbURL,
@@ -56,7 +55,6 @@ func init() {
 			"Table Name",
 		)
 
-	// Producer specific flags
 	rootCmd.PersistentFlags().
 		StringVar(
 			&topic,
@@ -78,6 +76,20 @@ func init() {
 			getEnvDuration("LOCAL_PRODUCER_INTERVAL", 1*time.Second),
 			"Interval between batches",
 		)
+	rootCmd.PersistentFlags().
+		IntVar(
+			&seedCount,
+			"count",
+			getEnvInt("LOCAL_PRODUCER_SEED_COUNT", 100000),
+			"Total events to produce for seed command",
+		)
+	rootCmd.PersistentFlags().
+		IntVar(
+			&payloadSize,
+			"payload-size",
+			getEnvInt("LOCAL_PRODUCER_PAYLOAD_SIZE", 150),
+			"Size of the random payload in bytes",
+		)
 }
 
 func main() {
@@ -85,6 +97,138 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+var seedCmd = &cobra.Command{
+	Use:   "seed",
+	Short: "Inject a fixed number of events and exit",
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		pool, err := pgxpool.New(cmd.Context(), dbURL)
+		if err != nil {
+			return err
+		}
+		defer pool.Close()
+
+		staticPayload := generateStaticPayload(payloadSize)
+
+		fmt.Printf(
+			"🚀 Seeding %d events (%d bytes each) into %s...\n",
+			seedCount,
+			payloadSize,
+			table,
+		)
+		start := time.Now()
+
+		for produced := 0; produced < seedCount; {
+			toSend := batchSize
+			if remaining := seedCount - produced; remaining < batchSize {
+				toSend = remaining
+			}
+
+			if err := sendBatch(cmd.Context(), pool, toSend, staticPayload); err != nil {
+				return err
+			}
+
+			produced += toSend
+			fmt.Printf("\rInserted: %d/%d", produced, seedCount)
+		}
+
+		fmt.Printf(
+			"\n✅ Done in %v (Avg: %.0f eps)\n",
+			time.Since(start),
+			float64(seedCount)/time.Since(start).Seconds(),
+		)
+		return nil
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(seedCmd)
+}
+
+var benchCmd = &cobra.Command{
+	Use:   "bench",
+	Short: "Produce events continuously at a set interval",
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		pool, err := pgxpool.New(cmd.Context(), dbURL)
+		if err != nil {
+			return err
+		}
+		defer pool.Close()
+
+		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+
+		staticPayload := generateStaticPayload(payloadSize)
+
+		fmt.Printf(
+			"🔥 Benchmark mode active: %d events (%d bytes) every %v\n",
+			batchSize,
+			payloadSize,
+			interval,
+		)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				fmt.Println("\nStopping benchmark mode...")
+				return nil
+			case <-ticker.C:
+				if err := sendBatch(ctx, pool, batchSize, staticPayload); err != nil {
+					log.Printf("Batch error: %v", err)
+				}
+				fmt.Printf("%d events inserted\n", batchSize)
+			}
+		}
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(benchCmd)
+}
+
+func sendBatch(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	currentSize int,
+	payload []byte, // Accept the pre-generated payload
+) error {
+	query := fmt.Sprintf(`
+        INSERT INTO %s (event_id, event_type, partition_key, payload, headers, status)
+        VALUES ($1, $2, $3, $4, $5, 'PENDING')`, table)
+
+	batch := &pgx.Batch{}
+	for i := 0; i < currentSize; i++ {
+		select {
+		case <-ctx.Done():
+			fmt.Println("Producer received shutdown signal, stopping batch...")
+			return ctx.Err()
+		default:
+			userID := math_rand.IntN(100000)
+
+			batch.Queue(
+				query,
+				uuid.New(),
+				topic,
+				fmt.Sprintf("user-%d", userID),
+				payload,
+				map[string]any{"trace_id": uuid.New().String()},
+			)
+		}
+	}
+
+	return pool.SendBatch(ctx, batch).Close()
+}
+
+func generateStaticPayload(size int) []byte {
+	b := make([]byte, size)
+	_, err := rand.Read(b)
+	if err != nil {
+		log.Fatalf("failed to generate random payload: %v", err)
+	}
+	return b
 }
 
 func getEnv(key, fallback string) string {
@@ -116,125 +260,4 @@ func getEnvDuration(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return d
-}
-
-// --- COMMAND: SEED ---
-var seedCmd = &cobra.Command{
-	Use:   "seed",
-	Short: "Inject a fixed number of events and exit",
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		count, _ := cmd.Flags().GetInt("count")
-		pool, err := pgxpool.New(cmd.Context(), dbURL)
-		if err != nil {
-			return err
-		}
-		defer pool.Close()
-
-		fmt.Printf("🚀 Seeding %d events into %s...\n", count, table)
-		start := time.Now()
-
-		for produced := 0; produced < count; {
-			// Calculate if we should send a full batch or just what's left
-			toSend := batchSize
-			if remaining := count - produced; remaining < batchSize {
-				toSend = remaining
-			}
-
-			if err := sendBatch(cmd.Context(), pool, toSend); err != nil {
-				return err
-			}
-
-			produced += toSend
-			fmt.Printf("\rInserted: %d/%d", produced, count)
-		}
-
-		fmt.Printf(
-			"\n✅ Done in %v (Avg: %.0f eps)\n",
-			time.Since(start),
-			float64(count)/time.Since(start).Seconds(),
-		)
-		return nil
-	},
-}
-
-func init() {
-	seedCmd.Flags().IntP("count", "c", 100000, "Total events to produce")
-	rootCmd.AddCommand(seedCmd)
-}
-
-// --- COMMAND: BENCH ---
-var benchCmd = &cobra.Command{
-	Use:   "bench",
-	Short: "Produce events continuously at a set interval",
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		pool, err := pgxpool.New(cmd.Context(), dbURL)
-		if err != nil {
-			return err
-		}
-		defer pool.Close()
-
-		// Handle OS interrupts
-		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
-		defer stop()
-
-		fmt.Printf("🔥 Benchmark mode active: %d events every %v\n", batchSize, interval)
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				fmt.Println("\nStopping benchmark mode...")
-				return nil
-			case <-ticker.C:
-				if err := sendBatch(ctx, pool, batchSize); err != nil { // Always uses full batchSize
-					log.Printf("Batch error: %v", err)
-				}
-				fmt.Printf("%d events inserted\n", batchSize)
-			}
-		}
-	},
-}
-
-func init() {
-	rootCmd.AddCommand(benchCmd)
-}
-
-func sendBatch(
-	ctx context.Context,
-	pool *pgxpool.Pool,
-	currentSize int,
-) error { // Added currentSize
-	query := fmt.Sprintf(`
-        INSERT INTO %s (event_id, event_type, partition_key, payload, headers, status)
-        VALUES ($1, $2, $3, $4, $5, 'PENDING')`, table)
-
-	batch := &pgx.Batch{}
-	for i := 0; i < currentSize; i++ { // Use the parameter, not the global
-		select {
-		case <-ctx.Done():
-			// Stop producing because SIGTERM/Interrupt was received
-			fmt.Println("Producer received shutdown signal, stopping batch...")
-			return ctx.Err()
-		default:
-			// Continue with the production
-			userID := rand.Intn(100000)
-			payload := fmt.Sprintf(
-				`{"user_id": %d, "email": "user-%d@example.com"}`,
-				userID,
-				userID,
-			)
-
-			batch.Queue(
-				query,
-				uuid.New(),
-				topic,
-				fmt.Sprintf("user-%d", userID),
-				[]byte(payload),
-				map[string]any{"trace_id": uuid.New().String()},
-			)
-		}
-	}
-
-	return pool.SendBatch(ctx, batch).Close()
 }

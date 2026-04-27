@@ -230,6 +230,8 @@ to the [configuration reference](https://open-outbox.dev/reference/configuration
 | `LOCAL_OTEL_TEST_TRACE_COUNT` | Traces to simulate during `make test-otel` | `100` |
 | `LOCAL_PRODUCER_BATCH_SIZE` | Records per batch inserted by test producer | `10000` |
 | `LOCAL_PRODUCER_INTERVAL` | Interval between test batch insertions | `1s` |
+| `LOCAL_PRODUCER_SEED_COUNT` | Total number of events to inject when running the seed command | `100000` |
+| `LOCAL_PRODUCER_PAYLOAD_SIZE` | Size of the random payload in bytes for each outbox event | `150` |
 
 > **Note**: if you change the `LOCAL_TEST_TOPIC`, and `LOCAL_NATS_STREAM` variables,
 > you need to recreate the new topic or stream in NATS and Kafka,

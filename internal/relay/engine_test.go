@@ -44,6 +44,8 @@ func TestEngine_Process_HappyPath(t *testing.T) {
 	mockStorage.On("MarkDeliveredBatch", ctx, []uuid.UUID{eventID}, relayID).
 		Return(nil)
 
+	mockPublisher.On("Connect", mock.Anything).Return(nil)
+
 	// Initialize Engine
 
 	rp := ExponentialBackoff{
@@ -72,6 +74,9 @@ func TestEngine_Process_HappyPath(t *testing.T) {
 		tm,
 	)
 	require.NoError(t, err, "Failed to initialize engine")
+
+	err = e.connectToPublisher(context.Background())
+	require.NoError(t, err)
 
 	// Execution
 	_, err = e.process(context.Background())
@@ -110,6 +115,8 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 	mockStorage.On("MarkDeliveredBatch", mock.Anything, []uuid.UUID{id1}, relayID).
 		Return(nil)
 
+	mockPublisher.On("Connect", mock.Anything).Return(nil)
+
 	// Failure side: (Notice we check for id2 here)
 	mockStorage.On("MarkFailedBatch", mock.Anything, mock.MatchedBy(func(failed []FailedEvent) bool {
 		return len(failed) == 1 && failed[0].ID == id2
@@ -144,6 +151,9 @@ func TestEngine_Process_MixedBatch(t *testing.T) {
 		tm,
 	)
 	require.NoError(t, err, "Failed to initialize engine")
+
+	err = e.connectToPublisher(context.Background())
+	require.NoError(t, err)
 
 	_, err = e.process(ctx)
 

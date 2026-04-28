@@ -363,7 +363,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(openoutbox_backlog_pending_count) \n/ \n(sum(rate(openoutbox_events_total{status=\"success\"}[1m])) + 1)",
+          "expr": "max(openoutbox_backlog_pending_count) \n/ \n(sum(rate(openoutbox_events_total{status=\"success\"}[1m])) + 1)",
           "interval": "30s",
           "legendFormat": "Time to Clear",
           "range": true,
@@ -523,7 +523,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (status) (openoutbox_backlog_pending_count{status=\"new\"})",
+          "expr": "max(openoutbox_backlog_pending_count{status=\"new\"})",
           "legendFormat": "New Events",
           "range": true,
           "refId": "A"
@@ -534,7 +534,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (status) (openoutbox_backlog_pending_count{status=\"retrying\"})",
+          "expr": "max(openoutbox_backlog_pending_count{status=\"retrying\"})",
           "instant": false,
           "legendFormat": "Retrying Events",
           "range": true,

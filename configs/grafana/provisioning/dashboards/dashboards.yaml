@@ -1,8 +1,11 @@
 apiVersion: 1
+
 providers:
-  - name: 'Open Outbox Monitoring'
+  - name: 'Open Outbox Dashboard'
     orgId: 1
     folder: 'Open Outbox'
     type: file
+    disableDeletion: true
+    editable: true
     options:
       path: /etc/grafana/provisioning/dashboards/open-outbox

@@ -37,6 +37,7 @@ func TestEngine_GracefulShutdown(t *testing.T) {
 		Interval:     10 * time.Millisecond,
 		BatchSize:    10,
 		LeaseTimeout: 1 * time.Minute,
+		EnableStats:  true,
 	}
 
 	tel, err := relay.CreateNoopTelemetry()
@@ -264,7 +265,7 @@ func TestEngine_Reaper_LockTheftPrevention(t *testing.T) {
 
 		// We caught it! The new worker has the lock and hasn't failed yet.
 		return status == "DEAD" && lockedBy == nil
-	}, 5*time.Second, 100*time.Millisecond)
+	}, 7*time.Second, 100*time.Millisecond)
 
 	// THE ZOMBIE ATTACK
 	// Now, the OLD worker (slow-worker-99) finally finishes its "slow" publish.

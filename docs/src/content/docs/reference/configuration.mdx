@@ -177,6 +177,21 @@ The amount of time the engine waits between failed attempts to establish the ini
 
 ---
 
+### `ENABLE_STATS`
+
+<Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="true"></Badge>
+
+Default: true
+
+Determines whether the engine performs background database scans to calculate backlog metrics,
+such as the count of pending events and the age of the oldest record.
+
+<Aside type="caution" title="Performance Implication">
+  For high-scale environments (e.g., backlogs exceeding 10M+ rows), it is recommended to set this
+   to false to avoid database I/O saturation and performance degradation caused by heavy aggregate scans.
+</Aside>
+
+---
 ### `SERVER_PORT`
 
 <Badge variant="default" text="Optional"></Badge> <Badge variant="default" text="String"></Badge>

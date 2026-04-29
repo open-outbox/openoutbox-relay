@@ -83,6 +83,13 @@ type Config struct {
 	// 	Default: "5s"
 	HealthCheckInterval time.Duration `mapstructure:"HEALTH_CHECK_INTERVAL"`
 
+	// EnableStats determines whether the engine performs background database
+	// scans to calculate backlog metrics (e.g., PENDING counts and oldest age).
+	// In high-scale environments with millions of rows, disabling this prevents
+	// performance degradation and database I/O saturation.
+	// 	Default: "true"
+	EnableStats bool `mapstructure:"ENABLE_STATS"`
+
 	// ServerPort is the address/port for the HTTP health check and metrics server.
 	//	Default: ":8080"
 	ServerPort string `mapstructure:"SERVER_PORT"`
@@ -218,8 +225,8 @@ func Load() (*Config, error) {
 	v.SetDefault("REAP_BATCH_SIZE", 100)
 	v.SetDefault("HEALTH_CHECK_INTERVAL", "5s")
 	v.SetDefault("PUBLISHER_CONNECT_RETRY_INTERVAL", "5s")
+	v.SetDefault("ENABLE_STATS", true)
 	v.SetDefault("SERVER_PORT", ":8080")
-	v.SetDefault("ENVIRONMENT", Production)
 	v.SetDefault("ENVIRONMENT", Production)
 
 	// Default Retry Policies using the defined Jitter constant.

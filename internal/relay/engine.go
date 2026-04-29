@@ -67,6 +67,7 @@ type Engine struct {
 	isHealthy                     atomic.Bool
 	healthCheckInterval           time.Duration
 	lastStatus                    State
+	enableStats                   bool
 }
 
 // EngineParams handles the tuning and identity.
@@ -82,6 +83,7 @@ type EngineParams struct {
 	HealthCheckInterval           time.Duration
 	RetryPolicy                   RetryPolicy
 	EnableBatchPublish            bool
+	EnableStats                   bool
 }
 
 // NewEngine initializes and returns a new Engine instance.
@@ -136,6 +138,7 @@ func NewEngine(
 		meter:                         tel.Meter,
 		events:                        make([]Event, params.BatchSize),
 		healthCheckInterval:           params.HealthCheckInterval,
+		enableStats:                   params.EnableStats,
 	}, nil
 }
 
@@ -158,9 +161,11 @@ func (e *Engine) Start(ctx context.Context) error {
 		return e.monitorHealth(gCtx)
 	})
 
-	g.Go(func() error {
-		return e.watchBacklog(gCtx)
-	})
+	if e.enableStats {
+		g.Go(func() error {
+			return e.watchBacklog(gCtx)
+		})
+	}
 
 	g.Go(func() error {
 		return e.reapExpiredLeases(gCtx)

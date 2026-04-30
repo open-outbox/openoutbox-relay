@@ -282,3 +282,8 @@ docker compose up -d --scale relay=3
 * **Database Load**: While scaling relays increases processing power, it also increases the number of concurrent `SELECT FOR UPDATE` queries on your database. Monitor your DB CPU and Lock contention when scaling beyond 5+ instances.
 
 * **Visualization**: The Grafana dashboard will automatically detect new instances and show them as separate rows in the Relay Operational State (State Timeline) panel.
+
+## Kafka metrics
+
+The `./scripts/kafka_metrics.sh` can be used to monitor the **EPS** and **Throughput**
+of kafka in realtime.

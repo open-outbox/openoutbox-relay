@@ -18,7 +18,7 @@ services:
       resources:
         limits:
           cpus: '1'
-          memory: 512M
+          memory: 32M
     env_file:
       - .env
 
@@ -115,6 +115,17 @@ services:
       - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
       - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
       - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      - KAFKA_JMX_PORT=9101
+      - JMX_PORT=9101
+      - KAFKA_JMX_OPTS=-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.local.only=false -Djava.rmi.server.hostname=localhost
+      - KAFKA_NUM_NETWORK_THREADS=4
+      - KAFKA_NUM_IO_THREADS=8
+      - KAFKA_QUEUED_MAX_REQUESTS=1000
+      - KAFKA_LOG_FLUSH_INTERVAL_MESSAGES=100000
+      - KAFKA_LOG_FLUSH_INTERVAL_MS=5000
+      - KAFKA_HEAP_OPTS=-Xmx4G -Xms4G
+      - KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS=1
+
     volumes:
       - kafka_data:/bitnami/kafka
 

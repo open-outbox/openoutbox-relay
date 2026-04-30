@@ -57,7 +57,7 @@ The easiest way to see the Relay in action is to use the provided local stack.
 6. Produce test events (use another terminal window):
 
     ```bash
-    make produce
+    make produce-bench
     ```
 
 In the first terminal, you should now see that events are being published to `stdout` (the test publisher).
@@ -90,7 +90,7 @@ In order to use NATS as the publisher:
 4. **Run the producer** to generate test events:
 
     ```bash
-    make produce
+    make produce-bench
     ```
 
 5. **Run the relay** in another terminal:
@@ -132,7 +132,7 @@ In order to use Kafka as the publisher:
 4. **Run the producer**:
 
     ```bash
-    make produce
+    make produce-bench
     ```
 
 5. **Run the relay**:
@@ -171,7 +171,7 @@ In order to use Redis as the publisher:
 3. **Run the producer** to generate test events:
 
     ```bash
-    make produce
+    make produce-bench
     ```
 
 4. **Run the relay** in another terminal:

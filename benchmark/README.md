@@ -168,6 +168,53 @@ make produce-bench -- --batch-size 100 --interval 10ms
 
 **Pro-Tip**: You can see all available flags (including --storage-url and --topic) by running make produce-help.
 
+## 7. Concurrent Testing Scripts
+
+To simulate production-grade workloads and identify the "breaking point" of your database and broker
+clusters, use the concurrent orchestration scripts. These scripts bypass single-process bottlenecks
+by spawning multiple isolated workers.
+
+### A. Parallel Bulk Seeding (`seed.sh`)
+
+While `make produce-seed` is suitable for baseline testing,
+`seed.sh` does a distributed seeding. Use this if you want to
+quickly fill your database before testing.
+
+```bash
+# Example: Launch 10 parallel producers to seed 50M events total
+./scripts/seed.sh --iterations 10 --count 5000000 --payload 200 --batch 10000
+```
+
+| Parameter | Short Description | Default |
+| :--- | :--- | :--- |
+| --iterations -i | Number of concurrent shell-level processes | 10 |
+| --count -c | Events generated per worker | 5,000,000 |
+| --batch -b | Events per DB transaction | 10,000 |
+| --payload -p | Size of each payload in bytes | 200 |
+
+### B. Parallel Pressure Benchmarking (bench.sh)
+
+While `make produce-bench` is suitable for baseline testing,
+`bench.sh` simulates a distributed producer environment.
+This is critical for testing Lock Contention in the Outbox table.
+
+```bash
+# Run 5 parallel benchmarkers with customized batching
+./scripts/bench.sh -i 5 -p 256 -b 5000
+```
+
+
+| Parameter | Short Description | Default |
+| :--- | :--- | :--- |
+| --iterations -i | Number of concurrent shell-level processes | 10 |
+| --batch -b | Events per DB transaction | 10,000 |
+| --payload -p | Size of each payload in bytes | 200 |
+
+> **!CAUTION**
+> Resource Exhaustion: Running high iterations (e.g., -i 20) may exhaust
+> the Docker Bridge network's available ports or trigger Database connection
+> limits (max_connections). Monitor your docker stats during execution.
+
 ## Monitoring Results
 
 ### Check Relay Throughput

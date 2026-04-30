@@ -3,6 +3,7 @@
 ITERATIONS=5
 PAYLOAD_SIZE=200
 BATCH_SIZE=10000
+INTERVAL="1s"
 
 cleanup() {
     echo -e "\n🛑 Signal received. Cleaning up $ITERATIONS benchmark workers..."
@@ -20,6 +21,7 @@ usage() {
     echo "  -i, --iterations    Number of concurrent benchmark workers (default: $ITERATIONS)"
     echo "  -p, --payload       Payload size in bytes (default: $PAYLOAD_SIZE)"
     echo "  -b, --batch         Batch size for producer (default: $BATCH_SIZE)"
+    echo "  -t, --interval      Sleep between batches (e.g., 100ms, 1s) (default: $INTERVAL)"
     echo "  -h, --help          Display this help message"
     exit 0
 }
@@ -29,6 +31,7 @@ while [[ $# -gt 0 ]]; do
         -i|--iterations) ITERATIONS="$2"; shift 2 ;;
         -p|--payload)    PAYLOAD_SIZE="$2"; shift 2 ;;
         -b|--batch)      BATCH_SIZE="$2";   shift 2 ;;
+        -t|--interval)   INTERVAL="$2";     shift 2 ;;
         -h|--help)       usage ;;
         *) echo "Unknown parameter: $1"; usage ;;
     esac
@@ -36,13 +39,16 @@ done
 
 echo "🧪 Starting Pressure Benchmark Suite"
 echo "Strategy: $ITERATIONS parallel workers simulating distributed producers"
-echo "Config:   Payload=${PAYLOAD_SIZE}B, Batch=$BATCH_SIZE"
+echo "Config:   Payload=${PAYLOAD_SIZE}B, Batch=$BATCH_SIZE, Interval=$INTERVAL"
 echo "------------------------------------------------------------"
 
 for ((i=1; i<=ITERATIONS; i++)); do
     echo "  [Worker $i] Launching bench process..."
     docker compose --profile tools run -T --rm producer \
-        bench --payload-size "$PAYLOAD_SIZE" --batch-size "$BATCH_SIZE" &
+        bench \
+        --payload-size "$PAYLOAD_SIZE" \
+        --batch-size "$BATCH_SIZE" \
+        --interval "$INTERVAL" &
 done
 
 echo "⏳ Benchmark active. Waiting for workers to complete (PID: $$)..."

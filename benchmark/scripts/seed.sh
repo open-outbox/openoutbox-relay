@@ -4,6 +4,7 @@ ITERATIONS=10
 COUNT=5000000
 PAYLOAD_SIZE=200
 BATCH_SIZE=10000
+INTERVAL="0s"
 
 cleanup() {
     echo -e "\n🛑 Signal received! Cleaning up $ITERATIONS background producers..."
@@ -22,6 +23,7 @@ usage() {
     echo "  -c, --count         Total events to seed per instance (default: $COUNT)"
     echo "  -p, --payload       Size of each payload in bytes (default: $PAYLOAD_SIZE)"
     echo "  -b, --batch         Events per database transaction/batch (default: $BATCH_SIZE)"
+    echo "  -t, --interval      Sleep between batches (e.g., 100ms, 1s) (default: $INTERVAL)"
     echo "  -h, --help          Display this help message"
     exit 0
 }
@@ -32,19 +34,21 @@ while [[ $# -gt 0 ]]; do
         -c|--count)      COUNT="$2";      shift 2 ;;
         -p|--payload)    PAYLOAD_SIZE="$2"; shift 2 ;;
         -b|--batch)      BATCH_SIZE="$2";   shift 2 ;;
+        -t|--interval)   INTERVAL="$2";     shift 2 ;;
         -h|--help)       usage ;;
         *) echo "Unknown parameter: $1"; usage ;;
     esac
 done
 
 echo "🚀 Starting $ITERATIONS producers..."
-echo "Config: Count=$COUNT, Payload=${PAYLOAD_SIZE}B, Batch=$BATCH_SIZE"
+echo "Config: Count=$COUNT, Payload=${PAYLOAD_SIZE}B, Batch=$BATCH_SIZE, Interval=$INTERVAL"
 
 for ((i=1; i<=ITERATIONS; i++)); do
     docker compose --profile tools run -T --rm producer \
         seed --count "$COUNT" \
         --payload-size "$PAYLOAD_SIZE" \
-        --batch-size "$BATCH_SIZE" &
+        --batch-size "$BATCH_SIZE" \
+        --interval "$INTERVAL" &
 done
 
 echo "⏳ Waiting for all producers to finish (PID: $$)..."

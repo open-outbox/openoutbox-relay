@@ -191,6 +191,7 @@ quickly fill your database before testing.
 | --count -c | Events generated per worker | 5,000,000 |
 | --batch -b | Events per DB transaction | 10,000 |
 | --payload -p | Size of each payload in bytes | 200 |
+| --interval -t | Sleep between each batch in duration format: "1s, 100ms, etc." | 1s |
 
 ### B. Parallel Pressure Benchmarking (bench.sh)
 
@@ -203,12 +204,12 @@ This is critical for testing Lock Contention in the Outbox table.
 ./scripts/bench.sh -i 5 -p 256 -b 5000
 ```
 
-
 | Parameter | Short Description | Default |
 | :--- | :--- | :--- |
 | --iterations -i | Number of concurrent shell-level processes | 10 |
 | --batch -b | Events per DB transaction | 10,000 |
 | --payload -p | Size of each payload in bytes | 200 |
+| --interval -t | Sleep between each batch in duration format: "1s, 100ms, etc." | 1s |
 
 > **!CAUTION**
 > Resource Exhaustion: Running high iterations (e.g., -i 20) may exhaust

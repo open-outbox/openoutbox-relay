@@ -15,7 +15,7 @@ export default defineConfig({
             },
             social: [
                 { icon: 'github', label: 'GitHub', href: 'https://github.com/open-outbox/relay' },
-                { icon: 'discord', label: 'Discord', href: 'https://discord.gg/Tk3jwfm7' }
+                { icon: 'discord', label: 'Discord', href: 'https://discord.gg/6vX9g85S' }
             ],
             editLink: {
                 baseUrl: 'https://github.com/open-outbox/relay/edit/main/docs/',

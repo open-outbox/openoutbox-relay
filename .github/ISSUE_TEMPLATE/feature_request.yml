@@ -1,0 +1,26 @@
+name: 🚀 Feature Request
+description: Propose a new publisher or architectural improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: "What is the current limitation?"
+      description: "Describe the gap in the current implementation. (e.g., 'Redis publisher lacks mTLS support')"
+      placeholder: "The current Redis publisher configuration is too limited for production security requirements..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "Proposed Change"
+      description: "How should we address this? Feel free to suggest a configuration or code structure."
+      placeholder: "Introduce a RedisConfig struct that maps to the underlying driver's TLS/Timeout options..."
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: "Value / Use Case"
+      description: "Why is this important for Open Outbox? Who does it help?"
+      placeholder: "Enables enterprise users to use Open Outbox in regulated environments requiring mTLS."

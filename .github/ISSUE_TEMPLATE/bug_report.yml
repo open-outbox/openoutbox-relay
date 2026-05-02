@@ -1,0 +1,30 @@
+name: 🐛 Bug Report
+description: Report a bug to help us improve Open Outbox
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Thanks for taking the time to fill out this bug report!"
+  - type: input
+    id: version
+    attributes:
+      label: Open Outbox Version
+      placeholder: e.g., v1.0.0
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Also tell us what you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Info
+      description: Postgres version, Kafka version, OS, etc.
+      placeholder: |
+        - Postgres: 16.4
+        - Kafka: 3.5
+        - OS: macOS M1

@@ -114,7 +114,7 @@ Stay connected and help us improve the Open Outbox ecosystem:
 
 ## Project Status & Roadmap
 
-Open Outbox is currently in **Public Beta** (`v0.1.0-beta`). We are stable enough for pilot production use and are actively seeking feedback as we head toward a v1.0 release.
+Open Outbox is currently in **Stable Release** (`v1.0.0`). The system is production-ready, and we are actively seeking feedback as we continue to refine the ecosystem.
 
 Check out our [**Project Roadmap**](./ROADMAP.md) to see what's coming next, including:
 
